@@ -324,3 +324,55 @@ func TestTranscriptTailIsOldestFirst(t *testing.T) {
 		}
 	}
 }
+
+// TestScriptedLineCountsAnswerDifferentQuestions pins the distinction that a
+// resumed session turns on.
+//
+// "Has a transcript ever been written?" and "is there any left to play?" are
+// different questions, and a fully-played session answers 0 to the second
+// while answering yes to the first. Conflating them made a restart hand a
+// finished lesson a whole second transcript — measured on the live service.
+func TestScriptedLineCountsAnswerDifferentQuestions(t *testing.T) {
+	st := newTestStore(t)
+	sessionID, teamID, studentID, _ := seedSession(t, st)
+
+	// Nothing written yet: both counts agree there is no script.
+	written, err := st.CountScriptedLines(sessionID)
+	if err != nil {
+		t.Fatalf("count written: %v", err)
+	}
+	unplayed, err := st.CountUnplayedLines(sessionID)
+	if err != nil {
+		t.Fatalf("count unplayed: %v", err)
+	}
+	if written != 0 || unplayed != 0 {
+		t.Fatalf("fresh session: written=%d unplayed=%d, want 0 and 0", written, unplayed)
+	}
+
+	lineID := uuid.NewString()
+	if err := st.InsertScriptedLines([]ScriptedLine{{
+		ID: lineID, SessionID: sessionID, TeamID: teamID,
+		StudentID: studentID, Ordinal: 1, Body: "line", GapMs: 1000,
+	}}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := st.MarkLinePlayed(lineID); err != nil {
+		t.Fatalf("mark played: %v", err)
+	}
+
+	// Fully played: nothing left to play, but a transcript certainly exists.
+	written, err = st.CountScriptedLines(sessionID)
+	if err != nil {
+		t.Fatalf("count written: %v", err)
+	}
+	unplayed, err = st.CountUnplayedLines(sessionID)
+	if err != nil {
+		t.Fatalf("count unplayed: %v", err)
+	}
+	if unplayed != 0 {
+		t.Errorf("unplayed = %d after the only line played, want 0", unplayed)
+	}
+	if written != 1 {
+		t.Errorf("written = %d, want 1 — a played line is still a line that was written", written)
+	}
+}

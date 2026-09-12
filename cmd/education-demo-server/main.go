@@ -78,6 +78,11 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// A restart must not leave a session marked running with nothing driving
+	// it. Anything the database still calls live gets its playback and
+	// monitoring back.
+	srv.ResumeInterruptedSessions(context.Background())
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 

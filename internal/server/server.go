@@ -400,12 +400,15 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 func (s *Server) beginSession(sessionID string, speed float64) {
 	ctx := context.Background()
 
-	unplayed, err := s.cfg.Store.CountUnplayedLines(sessionID)
+	// Whether a transcript was EVER written, not whether any is left to play.
+	// A resumed session whose script has fully played has zero unplayed lines,
+	// and asking the unplayed count here handed it a whole second lesson.
+	written, err := s.cfg.Store.CountScriptedLines(sessionID)
 	if err != nil {
-		log.Printf("session %s: count lines: %v", sessionID, err)
+		log.Printf("session %s: count scripted lines: %v", sessionID, err)
 		return
 	}
-	if unplayed == 0 {
+	if written == 0 {
 		if err := s.generateScripts(ctx, sessionID); err != nil {
 			log.Printf("session %s: generate scripts: %v", sessionID, err)
 			s.hub.publish(sessionID, Event{Type: EventSession, Data: map[string]any{
@@ -881,5 +884,56 @@ func (s *Server) Shutdown() {
 	s.mu.Unlock()
 	for _, r := range runners {
 		r.stop()
+	}
+}
+
+// ResumeInterruptedSessions restarts playback and monitoring for every session
+// the database still calls live.
+//
+// The runner map is in memory, so a restart — a deploy, a crash, an OOM kill —
+// leaves a session marked `running` with nothing driving it. It was measured
+// doing exactly that: the dashboard showed a live lesson, the rooms were
+// silent, and `Assess now` answered 409 `not_running` while the status pill
+// still read "running". Silent and indistinguishable from a quiet class.
+//
+// Resuming is safe because nothing that matters lives in memory: scripted
+// lines carry `played_at` so playback continues where it stopped rather than
+// replaying the lesson, and the monitor's cursors are per team in the
+// database, so no transcript is re-read and no duplicate alert is raised.
+func (s *Server) ResumeInterruptedSessions(ctx context.Context) {
+	sessions, err := s.cfg.Store.ListSessions()
+	if err != nil {
+		// Loud: starting up unable to tell which sessions were live is worth a
+		// line in the journal, even though it is not fatal.
+		log.Printf("resume: cannot list sessions: %v", err)
+		return
+	}
+	for _, sess := range sessions {
+		if sess.Status != model.SessionRunning && sess.Status != model.SessionPaused {
+			continue
+		}
+		left, err := s.cfg.Store.CountUnplayedLines(sess.ID)
+		if err != nil {
+			log.Printf("resume: session %s: count lines: %v", sess.ID, err)
+			continue
+		}
+		log.Printf("resume: session %s (%s) was %s at shutdown, %d scripted lines unplayed",
+			sess.ID, sess.Title, sess.Status, left)
+
+		paused := sess.Status == model.SessionPaused
+		go func(id string, startPaused bool) {
+			s.beginSession(id, 1)
+			if !startPaused {
+				return
+			}
+			// beginSession starts unpaused; put it straight back on hold so a
+			// lesson the teacher had paused does not resume talking on its own.
+			s.mu.Lock()
+			run, ok := s.runners[id]
+			s.mu.Unlock()
+			if ok {
+				run.setPaused(true)
+			}
+		}(sess.ID, paused)
 	}
 }

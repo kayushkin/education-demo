@@ -125,73 +125,77 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
           className="proof-cols">
           <div>
             <div className="eyebrow" style={{ marginBottom: 9 }}>Confusion — truth ↓ vs agent →</div>
-            <table className="matrix">
-              <thead>
-                <tr>
-                  <th />
-                  {states.map((s, i) => (
-                    <th key={s} title={`Agent said: ${humanize(s)}`}>
-                      <span style={{ color: stateColor(i) }}>{humanize(s)}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {states.map((t, ti) => (
-                  <tr key={t}>
-                    <th className="rowhead" title={`Truth: ${humanize(t)}`}>
-                      <span style={{ color: stateColor(ti) }}>{humanize(t)}</span>
-                    </th>
-                    {states.map((p) => {
-                      const n = accuracy.confusion[t]?.[p] ?? 0
-                      const diag = t === p
-                      const hot = !diag && n > 0 && n >= hottestOffDiagonal
-                      const cls = ['', n === 0 ? 'zero' : '', diag ? 'diag' : 'off', hot ? 'hot' : ''].join(' ').trim()
-                      return <td key={p} className={cls} title={`truth ${humanize(t)} → agent ${humanize(p)}: ${n}`}>{n}</td>
-                    })}
+            <div className="table-scroll">
+              <table className="matrix">
+                <thead>
+                  <tr>
+                    <th />
+                    {states.map((s, i) => (
+                      <th key={s} title={`Agent said: ${humanize(s)}`}>
+                        <span style={{ color: stateColor(i) }}>{humanize(s)}</span>
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {states.map((t, ti) => (
+                    <tr key={t}>
+                      <th className="rowhead" title={`Truth: ${humanize(t)}`}>
+                        <span style={{ color: stateColor(ti) }}>{humanize(t)}</span>
+                      </th>
+                      {states.map((p) => {
+                        const n = accuracy.confusion[t]?.[p] ?? 0
+                        const diag = t === p
+                        const hot = !diag && n > 0 && n >= hottestOffDiagonal
+                        const cls = ['', n === 0 ? 'zero' : '', diag ? 'diag' : 'off', hot ? 'hot' : ''].join(' ').trim()
+                        return <td key={p} className={cls} title={`truth ${humanize(t)} → agent ${humanize(p)}: ${n}`}>{n}</td>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div>
             <div className="eyebrow" style={{ marginBottom: 9 }}>Per state</div>
-            <table className="ptable">
-              <thead>
-                <tr>
-                  <th>State</th>
-                  <th>Truth</th>
-                  <th>Caught</th>
-                  <th>Recall</th>
-                  <th>Said</th>
-                  <th>Precision</th>
-                </tr>
-              </thead>
-              <tbody>
-                {states.map((s, i) => {
-                  const ps = accuracy.per_state[s]
-                  if (!ps) return null
-                  return (
-                    <tr key={s} className={s === worst ? 'headline-row' : undefined}>
-                      <td style={{ color: stateColor(i) }}>{humanize(s)}</td>
-                      <td>{ps.truth_count}</td>
-                      <td>{ps.caught}</td>
-                      <td>
-                        <span style={{ display: 'inline-flex', gap: 7, alignItems: 'center', justifyContent: 'flex-end' }}>
-                          <span className="bar" style={{ '--fill': stateColor(i) } as CSSProperties}>
-                            <i style={{ width: `${Math.max(0, Math.min(100, ps.recall))}%` }} />
+            <div className="table-scroll">
+              <table className="ptable">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>Truth</th>
+                    <th>Caught</th>
+                    <th>Recall</th>
+                    <th>Said</th>
+                    <th>Precision</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {states.map((s, i) => {
+                    const ps = accuracy.per_state[s]
+                    if (!ps) return null
+                    return (
+                      <tr key={s} className={s === worst ? 'headline-row' : undefined}>
+                        <td style={{ color: stateColor(i) }}>{humanize(s)}</td>
+                        <td>{ps.truth_count}</td>
+                        <td>{ps.caught}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', gap: 7, alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <span className="bar" style={{ '--fill': stateColor(i) } as CSSProperties}>
+                              <i style={{ width: `${Math.max(0, Math.min(100, ps.recall))}%` }} />
+                            </span>
+                            {ps.truth_count > 0 ? `${ps.recall.toFixed(0)}%` : '–'}
                           </span>
-                          {ps.truth_count > 0 ? `${ps.recall.toFixed(0)}%` : '–'}
-                        </span>
-                      </td>
-                      <td>{ps.predict_count}</td>
-                      <td>{ps.predict_count > 0 ? `${ps.precision.toFixed(0)}%` : '–'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td>{ps.predict_count}</td>
+                        <td>{ps.predict_count > 0 ? `${ps.precision.toFixed(0)}%` : '–'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

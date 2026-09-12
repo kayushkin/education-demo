@@ -910,7 +910,11 @@ a:hover { text-decoration: underline; }
      fixed height was what forced the scroll, so it goes to auto here. */
   .cmdbar { height: auto; min-height: var(--bar-h); flex-wrap: wrap;
     gap: 8px 10px; padding: 8px 12px; }
-  .cmdbar .hide-sm { display: none; }
+  /* Hide the long-form chrome on a phone, but NOT the toggle's label: an
+     unlabelled 34x18 switch in a wrapped bar is unusable, and measuring it
+     found exactly that — a working control with its words rendered 0x0. */
+  .cmdbar .hide-sm:not(.toggle .hide-sm) { display: none; }
+  .toggle .hide-sm { font-size: 12px; }
   /* A full-width spacer is a line break: the controls drop to their own row
      where all of them fit. */
   .cmdbar-spacer { flex: 1 0 100%; height: 0; margin: 0; }
@@ -922,3 +926,16 @@ a:hover { text-decoration: underline; }
   .stage h1 { font-size: 22px; }
   .drawer { width: 100vw; }
 }
+
+/* ===========================================================================
+   Wide tables on a narrow screen
+   ===========================================================================
+   The accuracy panel's per-state table and confusion matrix are genuinely
+   wider than a phone and cannot be usefully reflowed — a confusion matrix with
+   wrapped columns is not a confusion matrix. They scroll inside their own box
+   instead, which keeps the PAGE from scrolling sideways: measured at 390px the
+   document scrollWidth was 486 because these two tables overflowed unclipped.
+   ------------------------------------------------------------------------ */
+.table-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+.table-scroll::-webkit-scrollbar { height: 6px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }

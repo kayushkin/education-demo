@@ -431,6 +431,19 @@ func (s *Store) MarkLinePlayed(id string) error {
 	return err
 }
 
+// CountScriptedLines counts every scripted line, played or not.
+//
+// This is the question "has a transcript ever been written for this session?",
+// which is NOT the same as "is there anything left to play". A session whose
+// script has fully played has zero unplayed lines and must not be handed a
+// second transcript.
+func (s *Store) CountScriptedLines(sessionID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM scripted_lines WHERE session_id = ?`, sessionID).Scan(&n)
+	return n, err
+}
+
 func (s *Store) CountUnplayedLines(sessionID string) (int, error) {
 	var n int
 	err := s.db.QueryRow(
