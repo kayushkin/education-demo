@@ -75,7 +75,7 @@ export function TeamFloor({ vocab, teams, goals, students, cells, alerts, messag
         title="The floor"
         hint={
           <>
-            Ten rooms at once. A hairline ring means the team has engaged a goal and
+            {teams.length} {teams.length === 1 ? 'room' : 'rooms'} at once. A hairline ring means the team has engaged a goal and
             <strong style={{ color: 'var(--alert-ink)' }}> nobody in it understands</strong> — it cannot dig itself out.
           </>
         }

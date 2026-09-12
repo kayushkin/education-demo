@@ -398,14 +398,14 @@ function EmptyStage() {
   return (
     <div className="stage">
       <span className="eyebrow">No session yet</span>
-      <h1>You cannot be in ten rooms at once.</h1>
+      <h1>You cannot be in every room at once.</h1>
       <p className="lede">
         Split a class into breakout teams and an agent listens to every room at the same time,
         reads what each student actually understands, and tells you which room to walk to next.
       </p>
       <ol className="steps">
         <li><b>Create a session</b><span>Pick a lesson, a team count and a class size. Each simulated student is given a hidden understanding state the agent never sees.</span></li>
-        <li><b>Start it</b><span>Ten rooms begin talking at once. Transcripts take 30–90 seconds to write, then the conversation drips in at classroom pace.</span></li>
+        <li><b>Start it</b><span>Every room begins talking at once. Transcripts take 30–90 seconds to write, then the conversation drips in at classroom pace.</span></li>
         <li><b>Watch the feed</b><span>The agent reads every room on a tick and raises alerts — the loudest being a student confidently teaching an error to teammates who cannot tell.</span></li>
         <li><b>Prove it</b><span>Flip “Reveal ground truth” and the agent's every call is scored against the hidden states. That only works because this classroom is synthetic.</span></li>
       </ol>
