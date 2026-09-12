@@ -49,11 +49,13 @@ panel is honest about being an artifact of the simulation.
 
 ## Real people can join
 
-Any of the 30 seats can be claimed by a person at `/education-demo/join`. They get the team's
-live transcript and a message box, and the agent judges them by exactly the same path as a
-simulated student. Claiming a seat drops its remaining scripted lines, so a human and a script
-never speak through one name, and drops its ground truth, because nobody knows what a real
-person understands and scoring the agent against a leftover fiction would be a lie.
+Anyone can join a team at `/education-demo/join`. They get the team's live transcript and a
+message box, and the agent judges them by exactly the same path as a simulated student.
+
+A person joins as a **new** member and the team grows by one. An earlier version let them take
+over a simulated seat, and the agent then assessed the newcomer using the previous occupant's
+words — that is a measured bug, not a hypothetical. A human carries no ground truth, so they
+are excluded from the accuracy panel: nobody knows what a real person actually understands.
 
 Point a judge at a team, have them explain a goal wrong on purpose, and watch the teacher's
 dashboard raise a critical alert about them within a round.

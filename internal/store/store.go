@@ -253,33 +253,22 @@ func (s *Store) GetStudentByToken(token string) (*model.Student, error) {
 	return &list[0], nil
 }
 
-// ClaimSeat marks a seat as taken by a real person and renames it to what they
-// called themselves. The seat stops being simulated from this moment: its
-// remaining scripted lines are dropped, because a human and a script talking
-// through one mouth would make both the transcript and the assessment
-// nonsense.
-func (s *Store) ClaimSeat(studentID, displayName string) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(
-		`UPDATE students SET is_human = 1, name = ?, joined_at = ? WHERE id = ?`,
-		displayName, ms(time.Now()), studentID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(
-		`DELETE FROM scripted_lines WHERE student_id = ? AND played_at IS NULL`, studentID); err != nil {
-		return err
-	}
-	// The ground truth goes too. A human's understanding is not knowable, and
-	// leaving the seat's original truth rows behind would score the agent
-	// against a fiction.
-	if _, err := tx.Exec(`DELETE FROM truths WHERE student_id = ?`, studentID); err != nil {
-		return err
-	}
-	return tx.Commit()
+// AddHumanStudent seats a real person in a team as a NEW student.
+//
+// It deliberately does NOT let a person take over a simulated student's seat.
+// A seat that has already spoken carries a transcript history, and renaming it
+// re-attributes every one of those lines to whoever just sat down — measured:
+// a human who joined mid-session was assessed on three goals using the
+// previous occupant's words. A new row has no history to misattribute, no
+// scripted lines to cancel, and no ground truth to invalidate.
+//
+// The team grows by one, which is what actually happened.
+func (s *Store) AddHumanStudent(st *model.Student) error {
+	_, err := s.db.Exec(
+		`INSERT INTO students (id, session_id, team_id, name, is_human, join_token, joined_at)
+		 VALUES (?,?,?,?,1,?,?)`,
+		st.ID, st.SessionID, st.TeamID, st.Name, st.JoinToken, ms(time.Now()))
+	return err
 }
 
 // ---------- truth ----------

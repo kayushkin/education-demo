@@ -145,50 +145,84 @@ func TestAlertDedupeSuppressesStandingProblem(t *testing.T) {
 	}
 }
 
-// TestClaimSeatDropsScriptAndTruth pins the two things that must happen when a
-// real person takes a simulated seat: the script stops speaking through their
-// name, and their ground truth goes, because nobody knows what a real person
-// understands and scoring the agent against a leftover fiction would be wrong.
-func TestClaimSeatDropsScriptAndTruth(t *testing.T) {
+// TestHumanJoinsAsNewStudent pins that a real person is added rather than
+// substituted into a simulated seat.
+//
+// The bug this guards against was measured: a human who took over a seat was
+// assessed on three goals using the previous occupant's words, because the
+// seat's transcript history followed the rename. A new row cannot do that.
+func TestHumanJoinsAsNewStudent(t *testing.T) {
 	st := newTestStore(t)
-	sessionID, teamID, studentID, goalID := seedSession(t, st)
+	sessionID, teamID, simID, goalID := seedSession(t, st)
 
 	if err := st.SetTruth(model.Truth{
-		StudentID: studentID, GoalID: goalID, State: model.StateUnderstands,
+		StudentID: simID, GoalID: goalID, State: model.StateUnderstands,
 	}); err != nil {
 		t.Fatalf("set truth: %v", err)
 	}
 	if err := st.InsertScriptedLines([]ScriptedLine{{
 		ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
-		StudentID: studentID, Ordinal: 1, Body: "scripted", GapMs: 1000,
+		StudentID: simID, Ordinal: 1, Body: "scripted", GapMs: 1000,
 	}}); err != nil {
 		t.Fatalf("insert script: %v", err)
 	}
 
-	if err := st.ClaimSeat(studentID, "Real Person"); err != nil {
-		t.Fatalf("claim seat: %v", err)
+	human := &model.Student{
+		ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
+		Name: "Judge Alice", JoinToken: "tok-human",
+	}
+	if err := st.AddHumanStudent(human); err != nil {
+		t.Fatalf("add human: %v", err)
 	}
 
+	// The simulated student is untouched: same name, still simulated, script
+	// and ground truth intact.
+	sim, err := st.GetStudent(simID)
+	if err != nil {
+		t.Fatalf("get simulated student: %v", err)
+	}
+	if sim.IsHuman || sim.Name != "Amara" {
+		t.Errorf("simulated seat was altered: is_human=%v name=%q", sim.IsHuman, sim.Name)
+	}
 	line, err := st.NextScriptedLine(teamID)
 	if err != nil {
 		t.Fatalf("next line: %v", err)
 	}
-	if line != nil {
-		t.Errorf("scripted line survived the claim: %q", line.Body)
+	if line == nil {
+		t.Error("the simulated student's script was cancelled by someone else joining")
 	}
 	truths, err := st.ListTruths(sessionID)
 	if err != nil {
 		t.Fatalf("list truths: %v", err)
 	}
-	if len(truths) != 0 {
-		t.Errorf("ground truth survived the claim: %+v", truths)
+	if len(truths) != 1 {
+		t.Errorf("ground truth rows = %d, want 1 (the human adds none)", len(truths))
 	}
-	student, err := st.GetStudent(studentID)
+
+	// The human is present, marked, and has no ground truth of their own —
+	// nobody knows what a real person understands.
+	joined, err := st.GetStudent(human.ID)
 	if err != nil {
-		t.Fatalf("get student: %v", err)
+		t.Fatalf("get human: %v", err)
 	}
-	if !student.IsHuman || student.Name != "Real Person" {
-		t.Errorf("seat not claimed: is_human=%v name=%q", student.IsHuman, student.Name)
+	if !joined.IsHuman || joined.Name != "Judge Alice" {
+		t.Errorf("human not seated correctly: is_human=%v name=%q", joined.IsHuman, joined.Name)
+	}
+	if joined.JoinedAt == nil {
+		t.Error("joined_at was not stamped")
+	}
+	for _, tr := range truths {
+		if tr.StudentID == human.ID {
+			t.Error("a human was given ground truth")
+		}
+	}
+
+	roster, err := st.ListTeamStudents(teamID)
+	if err != nil {
+		t.Fatalf("list team: %v", err)
+	}
+	if len(roster) != 2 {
+		t.Errorf("team size = %d, want 2 (the team grew by one)", len(roster))
 	}
 }
 

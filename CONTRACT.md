@@ -79,8 +79,13 @@ Both routes exist **only because the students are synthetic**. Label them as suc
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/sessions/{id}/seats` | `[{student_id, name, team_id, team_name, taken}]`. |
-| `POST` | `/api/sessions/{id}/join` | Body `{display_name, student_id? , team_id?}`. Returns `{student, token}`. **Keep the token** — it authenticates every message. Claims an existing seat rather than adding a 31st student; that seat's remaining scripted lines are dropped so a human and a script never speak through one name. `409 seat_taken` / `409 no_free_seat`. |
+| `GET` | `/api/sessions/{id}/rooms` | `[{team_id, team_name, members[], humans}]` — the teams you can join and who is in them. |
+| `POST` | `/api/sessions/{id}/join` | Body `{display_name, team_id?}`. Returns `201 {student, token}`. **Keep the token** — it authenticates every message; persist it in localStorage. Omitting `team_id` puts the person in the smallest team. `409 name_taken` when that name is already in the room, `404 unknown_team`, `400 name_too_long` (40 chars). |
+
+⚠️ **Joining ADDS a student to the team; it does not take over a simulated one.** The team grows
+by one. An earlier design renamed an existing seat, and the agent then assessed the newcomer
+using the previous occupant's words — measured, and the reason it works this way now. A human
+has no ground truth and is excluded from the accuracy panel.
 | `GET` | `/api/sessions/{id}/teams/{teamID}/messages` | Last 200, oldest first. |
 | `POST` | `/api/sessions/{id}/teams/{teamID}/messages` | Body `{token, body}`. `401 unknown_token`, `403 wrong_room`. A human's message is stored exactly like a scripted one and judged by the same path. |
 | `POST` | `/api/alerts/{alertID}/resolve` | Teacher dismisses an alert. |

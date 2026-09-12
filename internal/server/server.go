@@ -79,7 +79,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+api+"/sessions/{id}/end", s.handleEnd)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/assess", s.handleAssessNow)
 
-	mux.HandleFunc("GET "+api+"/sessions/{id}/seats", s.handleSeats)
+	mux.HandleFunc("GET "+api+"/sessions/{id}/rooms", s.handleRooms)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/join", s.handleJoin)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/teams/{teamID}/messages", s.handleTeamMessages)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/teams/{teamID}/messages", s.handlePostMessage)
@@ -609,8 +609,8 @@ func (s *Server) handleTruth(w http.ResponseWriter, r *http.Request) {
 
 // ---------- rooms: joining and talking ----------
 
-// handleSeats lists the seats a real person can claim, newest sessions first.
-func (s *Server) handleSeats(w http.ResponseWriter, r *http.Request) {
+// handleRooms lists the teams a person can join, with who is already in them.
+func (s *Server) handleRooms(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	students, err := s.cfg.Store.ListStudents(sessionID)
 	if err != nil {
@@ -622,46 +622,71 @@ func (s *Server) handleSeats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
 		return
 	}
-	type seat struct {
-		StudentID string `json:"student_id"`
-		Name      string `json:"name"`
-		TeamID    string `json:"team_id"`
-		TeamName  string `json:"team_name"`
-		Taken     bool   `json:"taken"`
+	type room struct {
+		TeamID   string   `json:"team_id"`
+		TeamName string   `json:"team_name"`
+		Members  []string `json:"members"`
+		Humans   int      `json:"humans"`
 	}
-	teamName := map[string]string{}
+	out := make([]room, 0, len(teams))
 	for _, t := range teams {
-		teamName[t.ID] = t.Name
-	}
-	out := []seat{}
-	for _, st := range students {
-		out = append(out, seat{
-			StudentID: st.ID, Name: st.Name, TeamID: st.TeamID,
-			TeamName: teamName[st.TeamID], Taken: st.IsHuman,
-		})
+		rm := room{TeamID: t.ID, TeamName: t.Name, Members: []string{}}
+		for _, st := range students {
+			if st.TeamID != t.ID {
+				continue
+			}
+			rm.Members = append(rm.Members, st.Name)
+			if st.IsHuman {
+				rm.Humans++
+			}
+		}
+		out = append(out, rm)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
 type joinRequest struct {
-	StudentID   string `json:"student_id"`
 	TeamID      string `json:"team_id"`
 	DisplayName string `json:"display_name"`
 }
 
-// handleJoin claims a seat for a real person.
+// handleJoin seats a real person in a team.
 //
-// Claiming an existing seat rather than adding a 31st student is deliberate:
-// team sizes stay what the teacher set, and the seat's scripted lines are
-// dropped so a human and a script never speak through one name.
+// The person is added as a NEW student rather than taking over a simulated
+// one. Renaming an existing seat would re-attribute that seat's entire
+// transcript to whoever just sat down, and the agent would assess the newcomer
+// on words somebody else said.
 func (s *Server) handleJoin(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	var req joinRequest
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	if strings.TrimSpace(req.DisplayName) == "" {
+	name := strings.TrimSpace(req.DisplayName)
+	if name == "" {
 		writeError(w, http.StatusBadRequest, "missing_name", "display_name is required")
+		return
+	}
+	if len(name) > 40 {
+		writeError(w, http.StatusBadRequest, "name_too_long", "display_name must be under 40 characters")
+		return
+	}
+
+	if _, err := s.cfg.Store.GetSession(sessionID); errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "unknown_session", "no such session")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+
+	teams, err := s.cfg.Store.ListTeams(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	if len(teams) == 0 {
+		writeError(w, http.StatusConflict, "no_teams", "this session has no teams")
 		return
 	}
 
@@ -671,53 +696,53 @@ func (s *Server) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var target *model.Student
-	switch {
-	case req.StudentID != "":
-		for i := range students {
-			if students[i].ID == req.StudentID {
-				target = &students[i]
+	target := ""
+	if req.TeamID != "" {
+		for _, t := range teams {
+			if t.ID == req.TeamID {
+				target = t.ID
 			}
 		}
-		if target == nil {
-			writeError(w, http.StatusNotFound, "unknown_seat", "no such seat in this session")
+		if target == "" {
+			writeError(w, http.StatusNotFound, "unknown_team", "no such team in this session")
 			return
 		}
-		if target.IsHuman {
-			writeError(w, http.StatusConflict, "seat_taken", "someone already has that seat")
-			return
+	} else {
+		// No team asked for: put them in the smallest one, so joining does not
+		// pile every visitor into the same room.
+		size := map[string]int{}
+		for _, st := range students {
+			size[st.TeamID]++
 		}
-	default:
-		// No seat named: take any free one, preferring the requested team.
-		for i := range students {
-			if students[i].IsHuman {
-				continue
+		best := -1
+		for _, t := range teams {
+			if best < 0 || size[t.ID] < best {
+				best, target = size[t.ID], t.ID
 			}
-			if req.TeamID != "" && students[i].TeamID != req.TeamID {
-				continue
-			}
-			target = &students[i]
-			break
 		}
-		if target == nil {
-			writeError(w, http.StatusConflict, "no_free_seat",
-				"every seat in this session is taken")
+	}
+
+	// A duplicate display name in the same room would make the transcript
+	// ambiguous for the agent, which resolves speakers by name.
+	for _, st := range students {
+		if st.TeamID == target && strings.EqualFold(strings.TrimSpace(st.Name), name) {
+			writeError(w, http.StatusConflict, "name_taken",
+				fmt.Sprintf("someone in that group is already called %q; pick another name", name))
 			return
 		}
 	}
 
-	if err := s.cfg.Store.ClaimSeat(target.ID, strings.TrimSpace(req.DisplayName)); err != nil {
+	student := &model.Student{
+		ID: uuid.NewString(), SessionID: sessionID, TeamID: target,
+		Name: name, IsHuman: true, JoinToken: uuid.NewString(),
+	}
+	if err := s.cfg.Store.AddHumanStudent(student); err != nil {
 		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
 		return
 	}
-	claimed, err := s.cfg.Store.GetStudent(target.ID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"student": claimed,
-		"token":   claimed.JoinToken,
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"student": student,
+		"token":   student.JoinToken,
 	})
 }
 
