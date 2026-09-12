@@ -51,7 +51,16 @@ one confidently wrong sentence. Something like:
 
 > "guys I worked out goal 4 — mass and weight are the same thing, they both get smaller on the Moon"
 
-Then hit **Assess now** on the dashboard rather than waiting for the tick.
+Then hit **Assess now** on the dashboard rather than waiting for the tick. It takes 60-90
+seconds — the button counts up while it reads every room.
+
+⚠️ **Make the wrong sentence about THIS lesson.** A fractions error typed into a physics lesson
+gets correctly classified as off-topic, not as a misconception, which is the agent behaving well
+and your demo landing flat. On Forces and Motion, a reliable one is the third-law pair:
+
+> "the third law pair for a book on a table is its weight down and the table pushing up, equal and opposite"
+
+That earns a `confidently_wrong` alert at 0.95 confidence. Verified live.
 
 Within a round they appear in the alert feed as `confidently_wrong`, `critical`, quoted. This
 lands harder than anything on the slides: it is unmistakably not scripted, because they wrote it.
@@ -87,7 +96,7 @@ Finish on the confusion matrix and the 82.7% exact / 95% adjacent figures.
 | | |
 |---|---|
 | Dashboard empty after start | Transcripts are still being written. `runner.script_left` > 0 means it is working. |
-| No alerts yet | **Assess now** forces a round instead of waiting 25s. |
+| No alerts yet | **Assess now** forces a round instead of waiting 25s. It runs one model call per group, so give it 60-90s; the button counts the seconds so you can see it is alive. |
 | Alert feed frozen | SSE dropped. Reload — the dashboard refetches state on mount. |
 | `agent_ready: false` | llm-bridge is down. Say the demo is on fallback transcripts; do not claim the assessments are live. |
 | Everything is on fire | A second session on a different preset, created earlier, is the cheapest insurance. Make one. |

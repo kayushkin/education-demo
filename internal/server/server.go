@@ -565,8 +565,22 @@ func (s *Server) handleAssessNow(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	// MinNewMessages is bypassed: an explicit request means assess what is
 	// there, however little has changed.
+	//
+	// Concurrency is raised to cover every team in one wave. The background
+	// loop keeps 5 to spread its load between ticks, but a forced round has
+	// somebody waiting on it: at 5 a ten-team session runs two waves and was
+	// measured at 2m19s, long enough that the caller assumes it has hung and
+	// navigates away mid-request.
 	forced := *run.mon
 	forced.MinNewMessages = 1
+	teams, err := s.cfg.Store.ListTeams(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	if len(teams) > forced.Concurrency {
+		forced.Concurrency = len(teams)
+	}
 	checked, err := forced.RunRound(ctx, sessionID)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "assess_failed", err.Error())
