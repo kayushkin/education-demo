@@ -40,7 +40,7 @@ export function Misconceptions({ items, goals, teams, onOpenTeam }: {
                 <p className="misc-text">“{m.text}”</p>
                 <div className="misc-meta">
                   <span className="pill pill-mute">{goalLabel.get(m.goal_id) ?? 'goal'}</span>
-                  <span className="pill" style={{ color: m.team_ids.length > 1 ? 'var(--amber)' : undefined }}>
+                  <span className="pill" style={{ color: m.team_ids.length > 1 ? 'var(--caution-ink)' : undefined }}>
                     {m.team_ids.length} room{m.team_ids.length === 1 ? '' : 's'}
                   </span>
                   {m.team_ids.map((id) => (

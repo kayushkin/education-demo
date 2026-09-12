@@ -47,7 +47,7 @@ export function Join() {
         <div>
           <span className="eyebrow">Join a breakout room</span>
           <h1 style={{ fontSize: 24, margin: '8px 0 8px', letterSpacing: '-.025em' }}>Sit in with a team.</h1>
-          <p style={{ color: 'var(--text-dim)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
             You will be added to the room as yourself. Everything you say is read by the same agent that
             reads the simulated students — say something confidently wrong and watch the teacher's board.
           </p>
@@ -262,7 +262,7 @@ function JoinForm({ sessionID, sessionTitle, onJoined }: {
         <div>
           <span className="eyebrow">{sessionTitle ?? 'Lesson'}</span>
           <h1 style={{ fontSize: 24, margin: '8px 0 6px', letterSpacing: '-.025em' }}>Pick a room.</h1>
-          <p style={{ color: 'var(--text-dim)', fontSize: 13.5, lineHeight: 1.55, margin: 0 }}>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, lineHeight: 1.55, margin: 0 }}>
             You join as a new member — you are not replacing anyone. The agent reads your words the same
             way it reads everyone else's.
           </p>
@@ -282,7 +282,7 @@ function JoinForm({ sessionID, sessionTitle, onJoined }: {
             onChange={(e) => setName(e.target.value)}
             autoComplete="off"
           />
-          <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
+          <span style={{ fontSize: 11, color: 'var(--ink-faint)', fontFamily: 'var(--font-num)' }}>
             {name.trim().length}/40 · must be unique inside the room
           </span>
         </div>
@@ -303,7 +303,7 @@ function JoinForm({ sessionID, sessionTitle, onJoined }: {
                 <div className="tm">
                   {r.members.length} in room{r.humans > 0 ? ` · ${r.humans} human` : ''}
                 </div>
-                <div className="tm" style={{ color: 'var(--text-ghost)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="tm" style={{ color: 'var(--ink-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.members.join(', ') || 'empty'}
                 </div>
               </button>

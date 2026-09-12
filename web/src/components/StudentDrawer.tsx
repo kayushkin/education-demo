@@ -48,8 +48,8 @@ export function StudentDrawer({ vocab, state, studentID, truth, now, onClose, on
       </div>
 
       {student.is_human && truthByGoal && (
-        <div className="banner" style={{ borderColor: 'rgba(169,139,245,.4)' }}>
-          <span className="glyph" style={{ color: 'var(--violet)' }}>◈</span>
+        <div className="banner" style={{ background: 'var(--accent-fill)' }}>
+          <span className="glyph" style={{ color: 'var(--accent-ink)' }}>◈</span>
           <span>A real person has no ground truth, so nothing here is scored. The agent still judges them by exactly the same path as everyone else.</span>
         </div>
       )}
@@ -64,19 +64,19 @@ export function StudentDrawer({ vocab, state, studentID, truth, now, onClose, on
             <div
               key={g.id}
               style={{
-                border: `1px solid ${wrong ? 'rgba(255,107,74,.4)' : 'var(--rule)'}`,
-                borderRadius: 3, padding: '11px 12px', background: 'var(--ink-100)',
+                border: `1px solid ${wrong ? 'var(--alert)' : 'var(--hairline-faint)'}`,
+                borderRadius: 10, padding: '13px 14px', background: 'var(--surface)',
               }}
             >
               <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 6 }}>
-                <span className="mono" style={{ fontSize: 10, color: 'var(--text-ghost)' }}>G{g.ordinal}</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--ink-faint)' }}>G{g.ordinal}</span>
                 <span style={{ fontSize: 12.5, fontWeight: 600 }}>{g.short_label}</span>
                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 7, alignItems: 'center' }}>
                   {a
                     ? <>
                         <StateMark vocab={vocab} state={a.state} />
                         <span style={{ fontSize: 12 }}>{humanize(a.state)}</span>
-                        <span className="mono" style={{ fontSize: 10, color: 'var(--text-ghost)' }}>
+                        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
                           conf {a.confidence.toFixed(2)}
                         </span>
                       </>
@@ -85,7 +85,7 @@ export function StudentDrawer({ vocab, state, studentID, truth, now, onClose, on
                       </span>}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-mute)', lineHeight: 1.45, marginBottom: a?.evidence ? 7 : 0 }}>
+              <div style={{ fontSize: 12, color: 'var(--ink-muted)', lineHeight: 1.45, marginBottom: a?.evidence ? 7 : 0 }}>
                 {g.text}
               </div>
               {a?.evidence && <blockquote className="quote" style={{ margin: 0 }}>“{a.evidence}”</blockquote>}
@@ -93,7 +93,7 @@ export function StudentDrawer({ vocab, state, studentID, truth, now, onClose, on
                 <div style={{ marginTop: 8, display: 'flex', gap: 7, alignItems: 'center', fontSize: 11.5 }}>
                   <span className="eyebrow">truth</span>
                   <StateMark vocab={vocab} state={t} size="sm" hollow />
-                  <span style={{ color: wrong ? 'var(--alarm)' : 'var(--text-mute)' }}>
+                  <span style={{ color: wrong ? 'var(--alert-ink)' : 'var(--ink-muted)' }}>
                     {humanize(t)}{wrong ? ' — the agent got this one wrong' : ' — agreed'}
                   </span>
                 </div>
