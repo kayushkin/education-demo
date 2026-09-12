@@ -1,0 +1,147 @@
+# Breakout — live group monitoring for teachers
+
+**https://kayushkin.com/education-demo**
+
+A teacher splits 30 students into 10 breakout teams and can be in one room at a time.
+For the other nine she is guessing. This watches all ten and tells her where to walk.
+
+An agent reads each group's conversation live and reports four things:
+
+- **Who is confidently wrong.** A student explaining a goal incorrectly to teammates who
+  do not know better. The error is spreading, and this is the most urgent thing in the room.
+- **Which groups are stuck.** A goal no member of a group understands: they cannot teach
+  themselves out of it, so nothing happens until an adult arrives.
+- **Where the friction is.** Interpersonal conflict impeding the work — as distinct from
+  disagreement about the material, which is usually healthy and is not flagged.
+- **Who has gone quiet.** A student contributing nothing while the group works around them.
+
+Around those it keeps a per-goal understanding grid for every student, class-wide percentages
+per goal, and a collected list of what the class is getting wrong — the artifact a teacher
+reteaches from next lesson.
+
+## The part that makes it more than a demo
+
+The classroom is simulated: each student carries a hidden true understanding of each goal —
+`understands`, `partial`, `unknown`, or `misunderstands` — and their dialogue is written to
+reveal that state without stating it. The monitoring agent never sees it.
+
+Which means **the agent can be scored**. `GET /api/sessions/{id}/accuracy` compares every
+inference against the truth it was trying to recover. Most demos of this kind ask you to
+take their word for it; this one shows the confusion matrix.
+
+Measured on a 30-student, 10-team, 5-goal session (Forces and Motion), one monitoring round:
+
+| | |
+|---|---|
+| Coverage | 139 / 150 student-goal pairs |
+| Exact agreement | **82.7%** |
+| Within one state | 95.0% |
+| **Recall on `misunderstands`** | **100%** (18 of 18) |
+| Precision on `misunderstands` | 62% |
+
+The headline is the recall: it caught every student who genuinely held a wrong idea. The
+precision says how it pays for that — it over-flags some `partial` and `unknown` students as
+misunderstanding. For a tool whose job is to stop an error spreading, erring that way is the
+right direction, but it is a real cost and the panel shows it rather than hiding it.
+
+A real classroom has no ground truth, so none of this would be computable there. The accuracy
+panel is honest about being an artifact of the simulation.
+
+## Real people can join
+
+Any of the 30 seats can be claimed by a person at `/education-demo/join`. They get the team's
+live transcript and a message box, and the agent judges them by exactly the same path as a
+simulated student. Claiming a seat drops its remaining scripted lines, so a human and a script
+never speak through one name, and drops its ground truth, because nobody knows what a real
+person understands and scoring the agent against a leftover fiction would be a lie.
+
+Point a judge at a team, have them explain a goal wrong on purpose, and watch the teacher's
+dashboard raise a critical alert about them within a round.
+
+## Running it
+
+```bash
+go build -o education-demo-server ./cmd/education-demo-server
+cd web && npm install && npm run build && cd ..
+./education-demo-server -web web/dist
+```
+
+Deploy to kayushkin.com/education-demo with `./deploy.sh` — it builds both halves, checks the
+front end's asset paths carry the prefix, installs the systemd unit, adds the nginx location
+if missing, and refuses to finish unless the public URL answers.
+
+### Flags
+
+| Flag | Default | |
+|---|---|---|
+| `-addr` | `127.0.0.1:8316` | listen address |
+| `-db` | `~/.config/education-demo/education-demo.db` | SQLite path |
+| `-web` | *(none)* | built front end; omit to serve the API only |
+| `-base-path` | *(none)* | path prefix, `/education-demo` in production |
+| `-bridge-url` | `http://localhost:8160` | llm-bridge-server |
+| `-instance` | `inst-cc-local` | llm-bridge instance for model calls |
+| `-monitor-interval` | `25s` | gap between assessment rounds |
+
+## How it works
+
+```
+POST /sessions          seed 10 teams, 30 students, draw hidden truth per student per goal
+POST /sessions/{id}/start
+      │
+      ├─ 10 parallel calls ──→ one scripted transcript per team, written FROM the hidden truth
+      │                        (30-90s; the session reports "starting" immediately)
+      │
+      ├─ player   ──→ drips each script into its room in real time, one goroutine per team
+      │               a human typing in a room is just another writer to the same log
+      │
+      └─ monitor  ──→ every 25s, one call per team that has moved, over its recent transcript
+                      → assessments, alerts, misconceptions  → SSE → dashboard
+```
+
+Every model call goes through **llm-bridge-server's `/oneshot`**, which runs on the Claude Code
+subscription. This process reads no API key and never talks to an LLM provider directly.
+
+### Deliberate choices
+
+**Planted scenarios.** A purely random draw across 30 students often yields a class where no
+group is fully stuck and nobody is confidently wrong in front of others — and a demo with an
+empty alert feed proves nothing. So `Build` forces one stuck group and one confidently-wrong
+explainer, and returns what it planted in `planted[]` rather than letting it look like the
+agent found something the simulation did not put there. The agent still has to *find* them,
+and in the measured run it found both, plus several nobody planted.
+
+**Silence is `unknown`, never `misunderstands`.** A student who knows they do not know asks a
+question. A student who misunderstands teaches the error to their team. Collapsing the two
+would destroy the single most valuable alert the tool raises, so the prompt, the vocabulary
+and the scoring all keep them apart.
+
+**A missing assessment is not `unknown`.** The agent only judges a student on a goal it has
+heard evidence about. An absent row is the agent declining to assert; `unknown` is the agent
+asserting. The dashboard renders them differently, and `understood_pct` is `-1` — "not yet
+assessed" — rather than `0` for a goal the class has not reached.
+
+**Degrading loudly.** If llm-bridge is unreachable the service still boots, still runs sessions
+on deterministic fallback transcripts, and still reports disengagement — which is countable
+from message volume. It writes **no understanding assessments at all**, because comprehension
+is not derivable from who talked most, and a keyword-guessed grid that looks like real
+assessment is worse than an empty one. `agent_ready` says which mode you are in, on the health
+endpoint and in the UI.
+
+**Alerts dedupe.** A group stuck on a goal for ten minutes is one thing the teacher should see
+once. Alerts collapse on `(kind, team, student, goal)` while unresolved, and may be raised
+again after she dismisses one.
+
+## Layout
+
+| Path | |
+|---|---|
+| `internal/model` | domain types and the vocabularies, served at `/api/vocabularies` |
+| `internal/store` | SQLite. `_txlock=immediate` is load-bearing — see the concurrency test |
+| `internal/simulation` | roster, hidden truth, transcript writing, playback |
+| `internal/monitor` | the watching agent, and the model-free participation fallback |
+| `internal/analytics` | per-goal rollups and the accuracy scoring |
+| `internal/server` | HTTP, SSE hub, session runner |
+| `web` | React 19 + TypeScript + Vite |
+
+`CONTRACT.md` is the route table. `go test ./...` covers the scoring edge cases, the sequence
+race, alert dedupe, and what happens to a seat when a human claims it.

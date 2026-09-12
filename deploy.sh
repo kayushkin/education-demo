@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#
+# Deploy education-demo to https://kayushkin.com/education-demo
+#
+#   1. build the front end (base path /education-demo/)
+#   2. build and provenance-check the Go binary
+#   3. install the systemd user unit and restart
+#   4. install the nginx location if it is not already there
+#   5. verify the live URL actually answers
+#
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN_DIR="$HOME/bin"
+SERVICE="education-demo.service"
+BINARY="education-demo-server"
+UNIT_DEST="$HOME/.config/systemd/user/$SERVICE"
+NGINX_SITE="/etc/nginx/sites-enabled/kayushkin.com"
+PUBLIC_URL="https://kayushkin.com/education-demo"
+
+cd "$REPO_DIR"
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+
+echo "==> Testing Go..."
+go test ./... 2>&1 | grep -v "^ok\|no test files" || true
+go test ./... > /dev/null
+
+echo "==> Building front end..."
+cd "$REPO_DIR/web"
+npm install --silent
+npm run build
+cd "$REPO_DIR"
+if [ ! -f "$REPO_DIR/web/dist/index.html" ]; then
+  echo "    REFUSING: web/dist/index.html is missing after the build." >&2
+  exit 1
+fi
+# The built asset URLs must carry the prefix, or the page loads blank behind
+# nginx with 404s that only show in the network tab. Cheaper to catch here.
+if ! grep -q '/education-demo/assets/' "$REPO_DIR/web/dist/index.html"; then
+  echo "    REFUSING: built index.html does not reference /education-demo/assets/." >&2
+  echo "    vite base is wrong; the app would 404 every asset in production." >&2
+  exit 1
+fi
+
+echo "==> Building $BINARY..."
+go build -o "$BINARY" ./cmd/education-demo-server
+
+echo "==> Checking provenance..."
+buildinfo="$(go version -m "$BINARY")"
+vcs_revision="$(printf '%s\n' "$buildinfo" | awk -F= '$1 ~ /[[:space:]]vcs\.revision$/ {print $2}')"
+if [ -z "$vcs_revision" ]; then
+  echo "    WARNING: no vcs.revision stamped; nothing ties this binary to a commit." >&2
+else
+  echo "    vcs.revision=$vcs_revision"
+fi
+
+echo "==> Installing binary and unit..."
+mkdir -p "$BIN_DIR" "$(dirname "$UNIT_DEST")"
+install -m 755 "$BINARY" "$BIN_DIR/$BINARY"
+install -m 644 "$REPO_DIR/systemd/$SERVICE" "$UNIT_DEST"
+systemctl --user daemon-reload
+systemctl --user enable "$SERVICE" >/dev/null 2>&1 || true
+systemctl --user restart "$SERVICE"
+
+echo "==> Waiting for the service to answer..."
+for _ in $(seq 1 30); do
+  if curl -sf http://127.0.0.1:8316/education-demo/api/health >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if ! curl -sf http://127.0.0.1:8316/education-demo/api/health >/dev/null 2>&1; then
+  echo "    FAILED: service is not answering on 127.0.0.1:8316." >&2
+  systemctl --user status "$SERVICE" --no-pager -n 30 >&2 || true
+  exit 1
+fi
+health="$(curl -s http://127.0.0.1:8316/education-demo/api/health)"
+echo "    $health"
+case "$health" in
+  *'"agent_ready":false'*)
+    # Not fatal, but it decides whether the demo is real or canned, so it is
+    # never allowed to pass silently.
+    echo "    WARNING: llm-bridge is unreachable. Sessions will run on fallback" >&2
+    echo "    transcripts with participation-only monitoring." >&2
+    ;;
+esac
+
+echo "==> Checking nginx..."
+if sudo -n grep -q "location /education-demo" "$NGINX_SITE" 2>/dev/null; then
+  echo "    location already present"
+else
+  echo "    inserting location before the catch-all"
+  sudo -n cp "$NGINX_SITE" "$NGINX_SITE.bak.$(date +%s)"
+  # Insert before the final `location / {` so the more specific prefix wins.
+  sudo -n python3 - "$NGINX_SITE" "$REPO_DIR/nginx-education-demo.conf" <<'PY'
+import sys
+site, snippet_path = sys.argv[1], sys.argv[2]
+with open(site) as f:
+    text = f.read()
+with open(snippet_path) as f:
+    snippet = "".join(l for l in f if not l.startswith("#") or "location" in l)
+marker = "    # Main site (catch-all)"
+if marker not in text:
+    marker = "    location / {"
+    if marker not in text:
+        sys.exit("cannot find the catch-all location to insert before")
+text = text.replace(marker, snippet.rstrip() + "\n\n" + marker, 1)
+with open(site, "w") as f:
+    f.write(text)
+PY
+  sudo -n nginx -t
+  sudo -n systemctl reload nginx
+fi
+
+echo "==> Verifying the public URL..."
+code="$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL/api/health")"
+if [ "$code" != "200" ]; then
+  echo "    FAILED: $PUBLIC_URL/api/health returned $code" >&2
+  exit 1
+fi
+echo "    $PUBLIC_URL/api/health -> 200"
+echo
+echo "Deployed: $PUBLIC_URL"

@@ -1,0 +1,23 @@
+[Unit]
+Description=education-demo — live breakout group monitoring for teachers
+After=network.target
+# The monitoring agent and the transcript writer both call llm-bridge-server.
+# It is a want, not a require: the service boots degraded (fallback transcripts,
+# participation-only monitoring) and says so, rather than refusing to start.
+Wants=llm-bridge.service
+
+[Service]
+Type=simple
+ExecStart=%h/bin/education-demo-server \
+  -addr 127.0.0.1:8316 \
+  -base-path /education-demo \
+  -web %h/repos/education-demo/web/dist \
+  -monitor-interval 25s
+Restart=on-failure
+RestartSec=5
+Environment=LLM_BRIDGE_URL=http://localhost:8160
+Environment=EDUCATION_DEMO_INSTANCE=inst-cc-local
+Environment=EDUCATION_DEMO_DB=%h/.config/education-demo/education-demo.db
+
+[Install]
+WantedBy=default.target
