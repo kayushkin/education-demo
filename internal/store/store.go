@@ -120,6 +120,25 @@ func (s *Store) ListSessions() ([]model.Session, error) {
 	return out, rows.Err()
 }
 
+// DeleteSession removes a session and everything hanging off it.
+//
+// One statement is enough because every child table declares
+// ON DELETE CASCADE and the connection runs with foreign keys on -- which is
+// load-bearing here: without the pragma SQLite accepts the delete and silently
+// orphans every goal, student, message and assessment, leaving a database that
+// looks emptied and is not.
+//
+// It reports whether a row was actually removed, so a caller can answer 404
+// rather than claiming to have deleted something that was never there.
+func (s *Store) DeleteSession(id string) (removed bool, err error) {
+	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 func (s *Store) SetSessionStatus(id string, st model.SessionStatus) error {
 	var col string
 	switch st {

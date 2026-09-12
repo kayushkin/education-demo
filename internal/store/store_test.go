@@ -376,3 +376,87 @@ func TestScriptedLineCountsAnswerDifferentQuestions(t *testing.T) {
 		t.Errorf("written = %d, want 1 — a played line is still a line that was written", written)
 	}
 }
+
+// TestDeleteSessionRemovesEverythingItOwns pins that deleting a session really
+// empties it rather than orphaning its rows.
+//
+// The delete is a single statement relying entirely on ON DELETE CASCADE, and
+// SQLite enforces that only when the foreign_keys pragma is on. With it off
+// the statement still succeeds and leaves every goal, student, message and
+// assessment behind — a database that looks emptied and is not. This checks
+// the rows are actually gone, table by table.
+func TestDeleteSessionRemovesEverythingItOwns(t *testing.T) {
+	st := newTestStore(t)
+	sessionID, teamID, studentID, goalID := seedSession(t, st)
+
+	if err := st.SetTruth(model.Truth{
+		StudentID: studentID, GoalID: goalID, Phase: 1, State: model.StateUnderstands,
+	}); err != nil {
+		t.Fatalf("seed truth: %v", err)
+	}
+	if err := st.AppendMessage(&model.Message{
+		ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
+		StudentID: studentID, Body: "hello", At: time.Now(),
+	}); err != nil {
+		t.Fatalf("seed message: %v", err)
+	}
+	if err := st.InsertScriptedLines([]ScriptedLine{{
+		ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
+		StudentID: studentID, Ordinal: 1, Body: "scripted", GapMs: 1000, Phase: 1,
+	}}); err != nil {
+		t.Fatalf("seed script: %v", err)
+	}
+	if err := st.UpsertAssessment(model.Assessment{
+		SessionID: sessionID, StudentID: studentID, GoalID: goalID,
+		State: model.StatePartial, UpdatedAt: time.Now(),
+	}, 1); err != nil {
+		t.Fatalf("seed assessment: %v", err)
+	}
+	if _, err := st.InsertAlert(&model.Alert{
+		ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
+		Kind: model.AlertDisengaged, Severity: model.SeverityInfo,
+		Title: "quiet", At: time.Now(),
+	}, "k"); err != nil {
+		t.Fatalf("seed alert: %v", err)
+	}
+	if err := st.RecordMisconception(&model.Misconception{
+		ID: uuid.NewString(), SessionID: sessionID, GoalID: goalID,
+		Text: "wrong idea", FirstSeen: time.Now(), LastSeen: time.Now(),
+	}, "wrong idea", teamID); err != nil {
+		t.Fatalf("seed misconception: %v", err)
+	}
+
+	removed, err := st.DeleteSession(sessionID)
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if !removed {
+		t.Fatal("delete reported nothing removed")
+	}
+
+	// Every table that hangs off a session must be empty, checked directly
+	// rather than through the read paths, which filter by session anyway and
+	// would hide an orphan.
+	for _, table := range []string{
+		"sessions", "goals", "teams", "students", "truths", "messages",
+		"scripted_lines", "assessments", "assessment_history", "alerts",
+		"misconceptions", "misconception_teams", "monitor_cursors",
+	} {
+		var n int
+		if err := st.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if n != 0 {
+			t.Errorf("%s still holds %d row(s) after the session was deleted", table, n)
+		}
+	}
+
+	// Deleting it again is a clean "nothing there", not an error.
+	removed, err = st.DeleteSession(sessionID)
+	if err != nil {
+		t.Fatalf("second delete: %v", err)
+	}
+	if removed {
+		t.Error("second delete claimed to remove a session that was already gone")
+	}
+}

@@ -23,7 +23,8 @@ Render `error` verbatim — the server says what went wrong and the UI must not 
 | `GET` | `/api/sessions/{id}` | **The dashboard's single read.** See `sessionState` below. |
 | `POST` | `/api/sessions/{id}/start` | Body `{speed?}` (1 = realistic pacing, 2 = twice as fast). Returns `202` immediately; transcript generation takes 30–90s in the background. Watch the SSE stream for `session:{status:"running"}`. |
 | `POST` | `/api/sessions/{id}/pause` / `/resume` | `409 not_running` when there is no live runner. |
-| `POST` | `/api/sessions/{id}/end` | Stops playback and monitoring for good. |
+| `POST` | `/api/sessions/{id}/end` | Stops playback and monitoring for good. The session stays readable. |
+| `DELETE` | `/api/sessions/{id}` | **Removes the session and everything it owns, for good** — goals, teams, students, ground truth, transcript, assessments, alerts, misconceptions. Not reversible, no archive. Stops a live runner first. `409 still_starting` while its transcripts are being written, `404 unknown_session` if it was never there. |
 | `POST` | `/api/sessions/{id}/assess` | Forces a monitoring round now instead of waiting for the tick. Blocking, up to ~60s. |
 
 ### `sessionState` — `GET /api/sessions/{id}`

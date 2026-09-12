@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+api+"/sessions", s.handleListSessions)
 	mux.HandleFunc("POST "+api+"/sessions", s.handleCreateSession)
 	mux.HandleFunc("GET "+api+"/sessions/{id}", s.handleGetSession)
+	mux.HandleFunc("DELETE "+api+"/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/stream", s.handleStream)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/accuracy", s.handleAccuracy)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/truth", s.handleTruth)
@@ -357,6 +358,42 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// handleDeleteSession removes a session and all of its data for good.
+//
+// The runner is stopped FIRST. A live player writing messages into a session
+// whose rows are being deleted would fail against the foreign keys on every
+// tick and fill the log with errors about a lesson nobody is watching.
+func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+
+	s.mu.Lock()
+	run, live := s.runners[sessionID]
+	delete(s.runners, sessionID)
+	starting := s.starting[sessionID]
+	s.mu.Unlock()
+
+	if starting {
+		writeError(w, http.StatusConflict, "still_starting",
+			"this session is still writing its transcripts; wait for it to finish, then delete it")
+		return
+	}
+	if live {
+		run.stop()
+	}
+
+	removed, err := s.cfg.Store.DeleteSession(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	if !removed {
+		writeError(w, http.StatusNotFound, "unknown_session", "no such session")
+		return
+	}
+	s.hub.publish(sessionID, Event{Type: EventSession, Data: map[string]any{"status": "deleted"}})
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "session_id": sessionID})
 }
 
 type startRequest struct {
