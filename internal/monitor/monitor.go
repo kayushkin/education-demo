@@ -188,7 +188,7 @@ func (m *Monitor) RunRound(ctx context.Context, sessionID string) (int, error) {
 			ran, err := m.assessTeam(ctx, sessionID, team, goals, minNew)
 			if err != nil {
 				m.logf("monitor %s: %v", team.Name, err)
-				if setErr := m.Store.SetMonitorCursor(team.ID, -1, err.Error()); setErr != nil {
+				if setErr := m.Store.SetMonitorCursor(team.ID, -1, 0, err.Error()); setErr != nil {
 					m.logf("monitor %s: record error: %v", team.Name, setErr)
 				}
 			}
@@ -207,18 +207,40 @@ func (m *Monitor) RunRound(ctx context.Context, sessionID string) (int, error) {
 func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.Team,
 	goals []model.Goal, minNew int) (bool, error) {
 
-	cursor, err := m.Store.MonitorCursor(team.ID)
+	cursor, lastPhase, err := m.Store.MonitorCursor(team.ID)
 	if err != nil {
 		return false, fmt.Errorf("read cursor: %w", err)
 	}
 	if cursor < 0 {
 		cursor = 0
 	}
+
+	// History rows are stamped with the act the lesson is in, so the progress
+	// view can say when the agent changed its mind as well as how.
+	sess, err := m.Store.GetSession(sessionID)
+	if err != nil {
+		return false, fmt.Errorf("read session: %w", err)
+	}
+	phase := sess.CurrentPhase
+
 	fresh, err := m.Store.ListTeamMessagesSince(team.ID, cursor, 500)
 	if err != nil {
 		return false, fmt.Errorf("read new messages: %w", err)
 	}
-	if len(fresh) < minNew {
+
+	// A new act is worth a reading on its own, even when too few messages have
+	// arrived to justify one on volume.
+	//
+	// Gating purely on message count was measured leaving the whole progress
+	// view flat: a lesson that played faster than the monitoring cadence got
+	// one round in act 1 and then never qualified again, because once playback
+	// ends no further messages arrive and the count can never be reached. The
+	// agent had read the opening of the lesson and nothing else.
+	newAct := phase > lastPhase
+	if len(fresh) == 0 && !newAct {
+		return false, nil
+	}
+	if len(fresh) < minNew && !newAct {
 		return false, nil
 	}
 
@@ -238,15 +260,10 @@ func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.T
 		return false, nil
 	}
 
-	highest := fresh[len(fresh)-1].Seq
-
-	// History rows are stamped with the phase the lesson is in, so the
-	// progress view can say when the agent changed its mind as well as how.
-	sess, err := m.Store.GetSession(sessionID)
-	if err != nil {
-		return false, fmt.Errorf("read session: %w", err)
+	highest := cursor
+	if len(fresh) > 0 {
+		highest = fresh[len(fresh)-1].Seq
 	}
-	phase := sess.CurrentPhase
 
 	if m.Agent == nil {
 		// No model configured: do what can be computed exactly, and refuse to
@@ -255,7 +272,8 @@ func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.T
 		// an empty one.
 		alerts := participationAlerts(sessionID, team, students, transcript)
 		m.writeAlerts(sessionID, team, alerts)
-		return true, m.Store.SetMonitorCursor(team.ID, highest, "no agent configured: participation only")
+		return true, m.Store.SetMonitorCursor(team.ID, highest, phase,
+			"no agent configured: participation only")
 	}
 
 	// Feed back the wrong ideas already collected for this session so the model
@@ -277,7 +295,7 @@ func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.T
 	}
 
 	m.applyRound(sessionID, team, goals, students, out, phase)
-	if err := m.Store.SetMonitorCursor(team.ID, highest, ""); err != nil {
+	if err := m.Store.SetMonitorCursor(team.ID, highest, phase, ""); err != nil {
 		return true, fmt.Errorf("advance cursor: %w", err)
 	}
 	return true, nil

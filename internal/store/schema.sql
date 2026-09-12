@@ -156,7 +156,12 @@ CREATE TABLE IF NOT EXISTS monitor_cursors (
   team_id     TEXT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
   last_seq    INTEGER NOT NULL DEFAULT 0,
   ran_at      INTEGER NOT NULL DEFAULT 0,
-  last_error  TEXT NOT NULL DEFAULT ''
+  last_error  TEXT NOT NULL DEFAULT '',
+  -- The phase this team was last assessed in. A round is forced when the
+  -- lesson moves into a new act even if too few messages have arrived to
+  -- justify one on volume alone, so every act gets at least one reading and
+  -- the progress view has more than a single point to draw.
+  last_phase  INTEGER NOT NULL DEFAULT 0
 );
 
 -- Every change the agent made to its mind, appended.

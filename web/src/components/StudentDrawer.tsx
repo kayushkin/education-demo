@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { humanize, severityColor, severityIndex, sinceLabel } from '../lib/display'
+import { humanize, latestTruthByPair, severityColor, severityIndex, sinceLabel } from '../lib/display'
 import type { SessionState, TruthCell, Vocabularies } from '../lib/types'
 import { Drawer } from './Drawer'
 import { StateMark } from './primitives'
@@ -23,7 +23,10 @@ export function StudentDrawer({ vocab, state, studentID, truth, now, onClose, on
 
   const truthByGoal = useMemo(() => {
     if (!truth) return null
-    return new Map(truth.filter((t) => t.student_id === studentID).map((t) => [t.goal_id, t.state]))
+    // Truth arrives one row per phase. Take the latest — the phase the accuracy
+    // panel scores against — rather than whichever row sorted last.
+    const latest = latestTruthByPair(truth.filter((t) => t.student_id === studentID))
+    return new Map([...latest.values()].map((t) => [t.goal_id, t.state] as const))
   }, [truth, studentID])
 
   const alerts = useMemo(

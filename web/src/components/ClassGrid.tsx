@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from 'react'
-import { humanize, stateColor, stateGlyph } from '../lib/display'
+import { humanize, latestTruthByPair, pairKey, stateColor, stateGlyph } from '../lib/display'
 import type { Assessment, Goal, Student, Team, TruthCell, Vocabularies } from '../lib/types'
 import { SectionHead } from './primitives'
 
@@ -17,15 +17,17 @@ interface Props {
 export function ClassGrid({ vocab, students, teams, goals, assessments, truth, onOpenStudent }: Props) {
   const inferred = useMemo(() => {
     const m = new Map<string, Assessment>()
-    for (const a of assessments) m.set(`${a.student_id}::${a.goal_id}`, a)
+    for (const a of assessments) m.set(pairKey(a.student_id, a.goal_id), a)
     return m
   }, [assessments])
 
   const truthMap = useMemo(() => {
     if (!truth) return null
-    const m = new Map<string, string>()
-    for (const t of truth) m.set(`${t.student_id}::${t.goal_id}`, t.state)
-    return m
+    // Truth arrives one row PER PHASE. The overlay has to show the same phase
+    // the accuracy panel scores against — the latest — or it would ring cells
+    // the scoreboard counted as correct.
+    const latest = latestTruthByPair(truth)
+    return new Map([...latest].map(([k, t]) => [k, t.state] as const))
   }, [truth])
 
   const ordered = useMemo(() => {
@@ -81,7 +83,7 @@ export function ClassGrid({ vocab, students, teams, goals, assessments, truth, o
                       </button>
                     </th>
                     {goals.map((g) => {
-                      const key = `${s.id}::${g.id}`
+                      const key = pairKey(s.id, g.id)
                       const a = inferred.get(key)
                       const t = truthMap?.get(key)
                       const ai = a ? vocab.understanding_states.indexOf(a.state) : -1

@@ -32,7 +32,7 @@ Rules:
 - Short, natural, texting-register lines. Most under 25 words. Some very short ("yeah", "wait what").
 - Real groups drift: a little off-topic chat is fine and makes the signal harder, which is the point.
 - Spread the dialogue across ALL the goals, not just the first.
-- Write 12 to 16 lines PER ACT.
+- Write 9 to 12 lines PER ACT.
 - Every line carries the act number it belongs to.
 - gap_seconds is the pause BEFORE the line: 2-12, larger after a question nobody wants to answer.
 

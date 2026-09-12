@@ -780,19 +780,25 @@ func (s *Store) ListMisconceptions(sessionID string) ([]model.Misconception, err
 
 // ---------- monitor cursors ----------
 
-func (s *Store) MonitorCursor(teamID string) (lastSeq int64, err error) {
-	err = s.db.QueryRow(`SELECT last_seq FROM monitor_cursors WHERE team_id = ?`, teamID).Scan(&lastSeq)
+// MonitorCursor reports how far the monitor has read in a team's room and
+// which act it last assessed it in.
+func (s *Store) MonitorCursor(teamID string) (lastSeq int64, lastPhase int, err error) {
+	err = s.db.QueryRow(
+		`SELECT last_seq, last_phase FROM monitor_cursors WHERE team_id = ?`,
+		teamID).Scan(&lastSeq, &lastPhase)
 	if err == sql.ErrNoRows {
-		return 0, nil
+		return 0, 0, nil
 	}
-	return lastSeq, err
+	return lastSeq, lastPhase, err
 }
 
-func (s *Store) SetMonitorCursor(teamID string, lastSeq int64, lastErr string) error {
+func (s *Store) SetMonitorCursor(teamID string, lastSeq int64, phase int, lastErr string) error {
 	_, err := s.db.Exec(
-		`INSERT INTO monitor_cursors (team_id, last_seq, ran_at, last_error) VALUES (?,?,?,?)
+		`INSERT INTO monitor_cursors (team_id, last_seq, ran_at, last_error, last_phase)
+		 VALUES (?,?,?,?,?)
 		 ON CONFLICT(team_id) DO UPDATE SET
-		   last_seq = excluded.last_seq, ran_at = excluded.ran_at, last_error = excluded.last_error`,
-		teamID, lastSeq, ms(time.Now()), lastErr)
+		   last_seq = excluded.last_seq, ran_at = excluded.ran_at,
+		   last_error = excluded.last_error, last_phase = excluded.last_phase`,
+		teamID, lastSeq, ms(time.Now()), lastErr, phase)
 	return err
 }

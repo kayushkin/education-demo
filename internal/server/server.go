@@ -48,13 +48,25 @@ type Server struct {
 
 	mu      sync.Mutex
 	runners map[string]*runner
+	// starting holds sessions whose transcripts are being written right now.
+	//
+	// A runner is only registered AFTER generation finishes, which with a
+	// three-act transcript is a minute or more. Without this a second start in
+	// that window sails past the runner check and writes the whole lesson a
+	// second time -- measured: eight concurrent model calls for a six-team
+	// session, and every line inserted twice.
+	starting map[string]bool
 }
 
 func New(cfg Config) *Server {
 	if cfg.MonitorInterval <= 0 {
 		cfg.MonitorInterval = 25 * time.Second
 	}
-	return &Server{cfg: cfg, hub: newHub(), runners: map[string]*runner{}}
+	return &Server{
+		cfg: cfg, hub: newHub(),
+		runners:  map[string]*runner{},
+		starting: map[string]bool{},
+	}
 }
 
 // Handler builds the mux. Every API route lives under BasePath + "/api".
@@ -383,6 +395,12 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "already_running", "session is already running")
 		return
 	}
+	if s.starting[sessionID] {
+		s.mu.Unlock()
+		writeError(w, http.StatusConflict, "already_starting",
+			"this session is already writing its transcripts; watch the stream for when it is running")
+		return
+	}
 	s.mu.Unlock()
 
 	if sess.Status == model.SessionEnded {
@@ -403,8 +421,25 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 
 // beginSession generates scripts then starts the runner. It is deliberately
 // detached from the request: the caller already has its 202.
+//
+// It claims the session in s.starting for its whole duration, including the
+// slow generation step, so a second start cannot run alongside it.
 func (s *Server) beginSession(sessionID string, speed float64) {
 	ctx := context.Background()
+
+	s.mu.Lock()
+	if s.starting[sessionID] || s.runners[sessionID] != nil {
+		s.mu.Unlock()
+		log.Printf("session %s: start ignored, already starting or running", sessionID)
+		return
+	}
+	s.starting[sessionID] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.starting, sessionID)
+		s.mu.Unlock()
+	}()
 
 	// Whether a transcript was EVER written, not whether any is left to play.
 	// A resumed session whose script has fully played has zero unplayed lines,

@@ -1,6 +1,6 @@
 import type {
   Accuracy, Alert, CreateSessionResult, Health, JoinResult, Message,
-  Preset, Room, Session, SessionState, TruthCell, Vocabularies,
+  Preset, Progress, Room, Session, SessionState, TruthCell, Vocabularies,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,8 @@ export interface CreateSessionBody {
   class_size?: number
   seed?: number
   plant_drama?: boolean
+  /** Acts the lesson runs in. Understanding advances between them. */
+  phase_count?: number
 }
 
 export const listSessions = () => request<Session[]>('api/sessions')
@@ -103,6 +105,13 @@ export const assessNow = (id: string) => request<unknown>(`api/sessions/${id}/as
 
 export const getAccuracy = (id: string) => request<Accuracy>(`api/sessions/${id}/accuracy`)
 export const getTruth = (id: string) => request<TruthCell[]>(`api/sessions/${id}/truth`)
+
+/**
+ * What changed over the lesson: beginning vs end, twice over. `observed` is the
+ * agent's own before-and-after and is always there; `actual` is the simulation's
+ * and may be absent.
+ */
+export const getProgress = (id: string) => request<Progress>(`api/sessions/${id}/progress`)
 
 // -- breakout rooms ---------------------------------------------------------
 

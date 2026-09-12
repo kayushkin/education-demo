@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { humanize, severityColor, severityIndex, sinceLabel } from '../lib/display'
+import { humanize, latestTruthByPair, severityColor, severityIndex, sinceLabel } from '../lib/display'
 import type { Alert, Goal, Message, SessionState, TruthCell, Vocabularies } from '../lib/types'
 import { Drawer } from './Drawer'
 import { StateMark, UnderstandingStrip } from './primitives'
@@ -35,9 +35,10 @@ export function TeamDrawer({ vocab, state, teamID, messages, truth, now, onClose
   }, [state.assessments])
   const truthFor = useMemo(() => {
     if (!truth) return null
-    const m = new Map<string, string>()
-    for (const t of truth) m.set(`${t.student_id}::${t.goal_id}`, t.state)
-    return m
+    // One row per phase arrives; take the latest, which is the one the
+    // accuracy panel scores the agent against.
+    const latest = latestTruthByPair(truth)
+    return new Map([...latest].map(([k, t]) => [k, t.state] as const))
   }, [truth])
 
   if (!team) return null

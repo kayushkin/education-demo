@@ -1,4 +1,4 @@
-import type { Vocabularies } from './types'
+import type { TruthCell, Vocabularies } from './types'
 
 // Presentation for server-owned enums.
 //
@@ -28,6 +28,55 @@ export function stateColor(index: number): string {
 export function stateGlyph(index: number): string {
   if (index < 0) return '–'
   return STATE_GLYPHS[index] ?? String(index + 1)
+}
+
+/** The key every truth-keyed map in this app uses. One student, one goal. */
+export function pairKey(studentID: string, goalID: string): string {
+  return `${studentID}::${goalID}`
+}
+
+/**
+ * The hidden state of each pair AT THE LATEST PHASE the lesson has reached.
+ *
+ * `GET /truth` returns one row per phase, so a pair appears several times and
+ * something has to choose between them. Letting array order choose would make
+ * the grid agree with the scoreboard only by luck: accuracy scores the agent's
+ * latest opinion against the CURRENT phase's truth, so the overlay has to show
+ * that same phase or it would ring cells the scoreboard counted as correct.
+ */
+export function latestTruthByPair(truth: TruthCell[]): Map<string, TruthCell> {
+  const m = new Map<string, TruthCell>()
+  for (const t of truth) {
+    const k = pairKey(t.student_id, t.goal_id)
+    const seen = m.get(k)
+    if (!seen || t.phase > seen.phase) m.set(k, t)
+  }
+  return m
+}
+
+/**
+ * Direction of travel between two percentages, as a sign. `before`/`after` of
+ * -1 mean the population was never measured, and an unmeasured population has
+ * no direction at all — it is not flat.
+ */
+export function deltaSign(before: number, after: number): -1 | 0 | 1 | null {
+  if (before === UNASSESSED_PCT || after === UNASSESSED_PCT) return null
+  if (after > before) return 1
+  if (after < before) return -1
+  return 0
+}
+
+/** Arrow for a direction. Redundant with colour, never replaced by it. */
+export function deltaGlyph(sign: -1 | 0 | 1 | null): string {
+  if (sign === null) return '–'
+  return sign > 0 ? '▲' : sign < 0 ? '▼' : '='
+}
+
+/** A signed point difference, rendered with its sign always visible. */
+export function signedPoints(before: number, after: number): string {
+  const d = after - before
+  const rounded = Math.round(d)
+  return `${rounded > 0 ? '+' : rounded < 0 ? '\u2212' : '\u00b1'}${Math.abs(rounded)}`
 }
 
 export function severityIndex(vocab: Vocabularies, severity: string): number {

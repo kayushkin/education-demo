@@ -36,6 +36,10 @@ export interface Session {
   created_at: string
   started_at?: string
   ended_at?: string
+  /** The act being played right now. The transcript advances it, not a timer. */
+  current_phase: number
+  /** How many acts the lesson has in total. */
+  phase_count: number
 }
 
 export interface Goal {
@@ -173,6 +177,8 @@ export interface Accuracy {
 export interface TruthCell {
   student_id: string
   goal_id: string
+  /** One row PER PHASE — the same pair appears once for every act played. */
+  phase: number
   state: UnderstandingState
 }
 
@@ -195,6 +201,74 @@ export interface CreateSessionResult {
   teams: Team[]
   students: Student[]
   planted: string[]
+  phase_count: number
+}
+
+// ---------------------------------------------------------------------------
+// Progress — what changed over the lesson.
+//
+// Reported TWICE from two different measurements that must never be merged or
+// averaged: `observed` is the agent's first opinion against its current one —
+// the only half that exists when the students are real — and `actual` is the
+// simulation's phase-1 truth against now, exact but possible only because the
+// students are synthetic. The gap between them is how much to trust the first.
+// ---------------------------------------------------------------------------
+
+/** A before and an after over ONE population of student-goal pairs. */
+export interface StateDelta {
+  before: Record<UnderstandingState, number>
+  after: Record<UnderstandingState, number>
+  /**
+   * How many student-goal pairs this covers. `before` and `after` are over the
+   * SAME pairs — the server already excluded anything it could not compare, so
+   * no coverage maths belongs on top of this.
+   */
+  pairs: number
+  /** -1 means "not yet assessed" for this population. It is NOT zero. */
+  understood_pct_before: number
+  understood_pct_after: number
+  /** -1 means "not yet assessed". It is NOT zero. */
+  misunderstood_pct_before: number
+  misunderstood_pct_after: number
+  improved: number
+  declined: number
+  unchanged: number
+}
+
+export interface GoalProgress {
+  goal_id: string
+  ordinal: number
+  short_label: string
+  delta: StateDelta
+}
+
+export interface StudentProgress {
+  student_id: string
+  name: string
+  team_id: string
+  is_human: boolean
+  delta: StateDelta
+}
+
+/** One before-and-after comparison, from one source. Never mixed with another. */
+export interface ProgressView {
+  /** "observed" or "actual" — carried so a caller cannot mix the two up by position. */
+  source: string
+  class: StateDelta
+  goals: GoalProgress[]
+  students: StudentProgress[]
+  goals_improved: number
+  goals_declined: number
+  goals_flat: number
+}
+
+export interface Progress {
+  observed: ProgressView
+  /** Absent unless the simulation has a ground truth to compare against. */
+  actual?: ProgressView
+  /** How far through the lesson the comparison reaches. */
+  phases_elapsed: number
+  phase_count: number
 }
 
 export type StreamEvent =
