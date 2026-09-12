@@ -57,7 +57,11 @@ export function Dashboard() {
   // Default to the newest session rather than making the teacher pick one.
   useEffect(() => {
     if (!selected && sessions && sessions.length > 0) {
-      setParams({ session: sessions[0].id }, { replace: true })
+      // Prefer a lesson that is actually live. The list is newest-first, and
+      // taking [0] blindly landed first-time visitors on an ENDED session
+      // whose numbers were stale and half-covered — measured on the live site.
+      const liveOne = sessions.find((x) => x.status === 'running' || x.status === 'paused')
+      setParams({ session: (liveOne ?? sessions[0]).id }, { replace: true })
     }
   }, [selected, sessions, setParams])
 
@@ -223,7 +227,7 @@ export function Dashboard() {
             <label className="toggle" title="Score the agent against the simulation's hidden ground truth">
               <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} />
               <span className="track" />
-              <span className="hide-sm">Reveal ground truth</span>
+              <span className="toggle-label">Reveal ground truth</span>
             </label>
           </div>
         </>
