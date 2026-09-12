@@ -99,7 +99,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
         <div className="statrow">
           <div className="stat">
             <div className="k">Exact agreement</div>
-            <div className="v" style={{ color: 'var(--live)' }}>{accuracy.exact_pct.toFixed(1)}<small>%</small></div>
+            <div className="v" style={{ color: 'var(--growth-ink)' }}>{accuracy.exact_pct.toFixed(1)}<small>%</small></div>
             <div className="n">{accuracy.correct} of {accuracy.scored} calls on the nose</div>
           </div>
           <div className="stat">
@@ -114,7 +114,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
           </div>
           <div className="stat">
             <div className="k">{humanize(worst)} recall</div>
-            <div className="v" style={{ color: 'var(--violet)' }}>
+            <div className="v" style={{ color: 'var(--truth-ink)' }}>
               {worstScore ? worstScore.recall.toFixed(0) : '–'}<small>%</small>
             </div>
             <div className="n">the headline number</div>
@@ -132,7 +132,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
                     <th />
                     {states.map((s, i) => (
                       <th key={s} title={`Agent said: ${humanize(s)}`}>
-                        <span style={{ color: stateColor(i) }}>{humanize(s)}</span>
+                        <span className="state-chip" style={{ '--mark': stateColor(i) } as CSSProperties}>{humanize(s)}</span>
                       </th>
                     ))}
                   </tr>
@@ -141,7 +141,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
                   {states.map((t, ti) => (
                     <tr key={t}>
                       <th className="rowhead" title={`Truth: ${humanize(t)}`}>
-                        <span style={{ color: stateColor(ti) }}>{humanize(t)}</span>
+                        <span className="state-chip" style={{ '--mark': stateColor(ti) } as CSSProperties}>{humanize(t)}</span>
                       </th>
                       {states.map((p) => {
                         const n = accuracy.confusion[t]?.[p] ?? 0
@@ -177,7 +177,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
                     if (!ps) return null
                     return (
                       <tr key={s} className={s === worst ? 'headline-row' : undefined}>
-                        <td style={{ color: stateColor(i) }}>{humanize(s)}</td>
+                        <td><span className="state-chip" style={{ '--mark': stateColor(i) } as CSSProperties}>{humanize(s)}</span></td>
                         <td>{ps.truth_count}</td>
                         <td>{ps.caught}</td>
                         <td>
@@ -202,7 +202,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
         <div className="proof-caveat">
           <span className="mark">⚠</span>
           <span>
-            <strong style={{ color: 'var(--text-dim)' }}>This scoreboard is only possible because the classroom is synthetic.</strong>{' '}
+            <strong style={{ color: 'var(--ink)' }}>This scoreboard is only possible because the classroom is synthetic.</strong>{' '}
             Every simulated student was assigned a hidden understanding state before the lesson began, and the
             agent never sees it — so its output can be scored against it. A real classroom has no answer key,
             and this panel would not exist. Humans who join are excluded from every number here: nobody knows

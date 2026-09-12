@@ -57,7 +57,7 @@ export function ClassGrid({ vocab, students, teams, goals, assessments, truth, o
         title="Every student"
         hint={
           truthMap
-            ? <>Inferred state fills each cell; the wedge in the corner is the hidden truth. <strong style={{ color: 'var(--alarm)' }}>{mismatches} ringed cells</strong> are where the agent was wrong.</>
+            ? <>Inferred state fills each cell; the wedge in the corner is the hidden truth. <strong style={{ color: 'var(--alert-ink)' }}>{mismatches} ringed cells</strong> are where the agent was wrong.</>
             : <>One row per student, one column per goal. A hatched cell means the agent has not heard enough from that student on that goal to say anything.</>
         }
       />
@@ -77,7 +77,7 @@ export function ClassGrid({ vocab, students, teams, goals, assessments, truth, o
                   <tr key={s.id} className={newTeam && i > 0 ? 'team-sep' : undefined}>
                     <th>
                       <button className="who" onClick={() => onOpenStudent(s.id)}>
-                        {s.is_human && <span style={{ color: 'var(--violet)' }} aria-label="real person">◈ </span>}
+                        {s.is_human && <span style={{ color: 'var(--accent-ink)' }} aria-label="real person">◈ </span>}
                         {s.name}
                         <span className="team-tag">{teamName.get(s.team_id)}</span>
                       </button>
@@ -103,7 +103,7 @@ export function ClassGrid({ vocab, students, teams, goals, assessments, truth, o
                             style={{ background: a ? stateColor(ai) : undefined } as CSSProperties}
                           >
                             {a ? stateGlyph(ai) : '–'}
-                            {t && <span className="truth-wedge" style={{ '--truth': stateColor(ti) } as CSSProperties} />}
+                            {t && <span className="truth-wedge" style={{ '--truth-mark': stateColor(ti) } as CSSProperties} />}
                           </button>
                         </td>
                       )

@@ -70,18 +70,18 @@ export function GoalHeatmap({ vocab, goals, teams, cells, rollups, onOpenTeam }:
                         <button
                           className={`cell${c.any_understands ? '' : ' stranded'}`}
                           onClick={() => onOpenTeam(t.id)}
-                          // One quantity, one sequential scale. Tinting by the
-                          // team's dominant state instead mixed four hues into
-                          // the same dark ground and produced unreadable mud —
-                          // and implied a second variable that is not there.
+                          // One quantity, one sequential scale, paper → sage.
+                          // Tinting by the team's dominant state instead mixes
+                          // four hues into one grid and implies a second
+                          // variable that is not there.
                           style={{
-                            background: `color-mix(in srgb, ${understandsColor} ${8 + share * 74}%, var(--ink-100))`,
+                            background: `color-mix(in srgb, ${understandsColor} ${8 + share * 74}%, var(--surface))`,
                           }}
                           title={`${t.name} · ${g.short_label} — ${vocab.understanding_states
                             .map((s) => `${humanize(s)} ${c.counts[s] ?? 0}`).join(', ')} · assessed ${c.assessed}/${c.roster}${
                             c.any_understands ? '' : ' · NOBODY in this team understands it'}`}
                         >
-                          <span className="pc" style={{ color: share > .5 ? 'var(--ink-000)' : 'var(--text)' }}>
+                          <span className="pc">
                             {Math.round(share * 100)}
                           </span>
                         </button>
@@ -93,7 +93,7 @@ export function GoalHeatmap({ vocab, goals, teams, cells, rollups, onOpenTeam }:
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--rule-faint)' }}>
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--hairline-faint)' }}>
           <StateKey vocab={vocab} />
         </div>
       </div>
@@ -109,8 +109,8 @@ export function GoalHeatmap({ vocab, goals, teams, cells, rollups, onOpenTeam }:
                 <span className="lab">{r.short_label}</span>
                 {notAssessed
                   ? <span className="pct na" title="No student has been assessed on this goal yet. This is not zero.">not yet assessed</span>
-                  : <span className="pct" style={{ color: stateColor(vocab.understanding_states.length - 1) }}>
-                      {r.understood_pct.toFixed(0)}<small style={{ fontSize: 11, color: 'var(--text-mute)' }}>%</small>
+                  : <span className="pct" style={{ color: 'var(--growth-ink)' }}>
+                      {r.understood_pct.toFixed(0)}<small>%</small>
                     </span>}
               </div>
               {goal && <div className="rollup-goal">{goal.text}</div>}
@@ -121,7 +121,7 @@ export function GoalHeatmap({ vocab, goals, teams, cells, rollups, onOpenTeam }:
                 </span>
                 {vocab.understanding_states.map((s, i) => (
                   (r.counts[s] ?? 0) > 0 ? (
-                    <span key={s} className="pill" style={{ '--c': stateColor(i), color: stateColor(i), borderColor: 'var(--rule)' } as CSSProperties}>
+                    <span key={s} className="pill state-chip" style={{ '--mark': stateColor(i) } as CSSProperties}>
                       {r.counts[s]} {humanize(s).toLowerCase()}
                     </span>
                   ) : null

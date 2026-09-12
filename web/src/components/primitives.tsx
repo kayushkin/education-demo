@@ -43,7 +43,7 @@ export function StateKey({ vocab }: { vocab: Vocabularies }) {
         </span>
       ))}
       <span className="state-key-item">
-        <span className="state-mark sm hollow" style={{ '--mark': 'var(--state-x)' } as CSSProperties}>–</span>
+        <span className="state-mark sm hollow" style={{ '--mark': 'var(--state-unassessed)' } as CSSProperties}>–</span>
         <span>Not yet assessed</span>
       </span>
     </div>

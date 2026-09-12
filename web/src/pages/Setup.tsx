@@ -81,7 +81,7 @@ export function Setup() {
                     <ol>
                       {p.goals.map((g, i) => (
                         <li key={g}>
-                          <strong style={{ color: 'var(--text)' }}>{p.labels[i] ?? `Goal ${i + 1}`}</strong>
+                          <strong style={{ color: 'var(--ink)' }}>{p.labels[i] ?? `Goal ${i + 1}`}</strong>
                           {' — '}{g}
                         </li>
                       ))}
@@ -104,7 +104,7 @@ export function Setup() {
                 <input id="size" className="input" type="number" min={1} max={120} value={classSize}
                   onChange={(e) => setClassSize(Math.max(1, Number(e.target.value) || 1))} />
               </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
+              <div style={{ fontFamily: 'var(--font-num)', fontSize: 11, color: 'var(--ink-muted)' }}>
                 ≈ {perTeam.toFixed(1)} students per room
               </div>
               <div className="field">
@@ -116,7 +116,7 @@ export function Setup() {
                 </select>
               </div>
               <div className="field">
-                <label htmlFor="seed">Seed <span style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                <label htmlFor="seed">Seed <span>(optional)</span></label>
                 <input id="seed" className="input" placeholder="leave blank for a fresh class" value={seed}
                   onChange={(e) => setSeed(e.target.value)} inputMode="numeric" />
               </div>
@@ -125,7 +125,7 @@ export function Setup() {
                 <span className="track" />
                 <span>Plant scenarios</span>
               </label>
-              <div style={{ fontSize: 11.5, color: 'var(--text-mute)', lineHeight: 1.45 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-muted)', lineHeight: 1.45 }}>
                 Forces a confidently-wrong student and a stranded team into the ground truth, so there is
                 always something for the agent to find. The planted list is shown, never hidden.
               </div>

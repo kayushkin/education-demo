@@ -145,7 +145,7 @@ function GoalRow({ vocab, ordinal, label, delta, truthDelta }: {
         <span className="ord">G{ordinal}</span>
         <span className="lab">{label}</span>
         {good === 'worse' && (
-          <span className="pill pill-alarm" title="Fewer students understand this goal than when the lesson started. This is the one to act on.">
+          <span className="pill pill-decline" title="Fewer students understand this goal than when the lesson started. This is the one to act on.">
             ▼ went backwards
           </span>
         )}
@@ -176,7 +176,7 @@ function GoalRow({ vocab, ordinal, label, delta, truthDelta }: {
         {truthDelta && (
           <>
             <Dumbbell
-              measure={`ground truth ${UNDERSTOOD}`} polarity={1} tone="var(--violet)" size="sm"
+              measure={`ground truth ${UNDERSTOOD}`} polarity={1} tone="var(--truth)" size="sm"
               before={truthDelta.understood_pct_before} after={truthDelta.understood_pct_after}
             />
             <div className="ba-read truth">
@@ -326,8 +326,8 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
         hint={
           <>
             The agent's first call on each student-goal against its call now, over the pairs
-            it can compare. A track that runs the right way is cyan; one that runs the wrong
-            way is vermilion.
+            it can compare. A track that runs the right way is green; one that runs the wrong
+            way is ochre.
           </>
         }
         right={
@@ -364,7 +364,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
             <span className="big">{observed.goals_improved} of {comparableGoals}</span>{' '}
             {comparableGoals === 1 ? 'goal is' : 'goals are'} more understood than at the start
             {observed.goals_declined > 0 && (
-              <> — and <strong style={{ color: 'var(--alarm)' }}>{observed.goals_declined} went backwards</strong></>
+              <> — and <strong style={{ color: 'var(--decline-ink)' }}>{observed.goals_declined} went backwards</strong></>
             )}.
             {unmeasuredGoals > 0 && (
               <> {unmeasuredGoals} {unmeasuredGoals === 1 ? 'goal has' : 'goals have'} nothing comparable yet.</>
@@ -375,7 +375,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
         <div className="statrow">
           <div className="stat">
             <div className="k">Understood now</div>
-            <div className="v" style={{ color: stateColor(vocab.understanding_states.length - 1) }}>
+            <div className="v" style={{ color: 'var(--growth-ink)' }}>
               {fmtPct(cls.understood_pct_after).replace('%', '')}<small>%</small>
             </div>
             <div className="n">
@@ -386,7 +386,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
           </div>
           <div className="stat">
             <div className="k">Misunderstood now</div>
-            <div className="v" style={{ color: stateColor(0) }}>
+            <div className="v" style={{ color: 'var(--alert-ink)' }}>
               {fmtPct(cls.misunderstood_pct_after).replace('%', '')}<small>%</small>
             </div>
             <div className="n">
@@ -397,7 +397,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
           </div>
           <div className="stat">
             <div className="k">Judgements that rose</div>
-            <div className="v" style={{ color: 'var(--live)' }}>{cls.improved}</div>
+            <div className="v" style={{ color: 'var(--growth-ink)' }}>{cls.improved}</div>
             <div className="n">{cls.declined} fell · {cls.unchanged} held · {cls.pairs} compared</div>
           </div>
           <div className="stat">
@@ -484,7 +484,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
                     <tr key={s.student_id} data-good={good}>
                       <td>
                         <button className="who" onClick={() => onOpenStudent(s.student_id)}>
-                          {s.is_human && <span style={{ color: 'var(--violet)' }} aria-label="real person">◈ </span>}
+                          {s.is_human && <span style={{ color: 'var(--accent-ink)' }} aria-label="real person">◈ </span>}
                           {s.name}
                         </button>
                       </td>
@@ -517,9 +517,9 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
                       <td className="moved">
                         {d.pairs > 0
                           ? <>
-                              <span title={`${d.improved} of this student's judgements rose`} style={{ color: d.improved > 0 ? 'var(--live)' : 'var(--text-ghost)' }}>▲{d.improved}</span>{' '}
-                              <span title={`${d.declined} fell`} style={{ color: d.declined > 0 ? 'var(--alarm)' : 'var(--text-ghost)' }}>▼{d.declined}</span>{' '}
-                              <span title={`${d.unchanged} held`} style={{ color: 'var(--text-ghost)' }}>={d.unchanged}</span>
+                              <span title={`${d.improved} of this student's judgements rose`} style={{ color: d.improved > 0 ? 'var(--growth-ink)' : 'var(--ink-faint)' }}>▲{d.improved}</span>{' '}
+                              <span title={`${d.declined} fell`} style={{ color: d.declined > 0 ? 'var(--decline-ink)' : 'var(--ink-faint)' }}>▼{d.declined}</span>{' '}
+                              <span title={`${d.unchanged} held`} style={{ color: 'var(--ink-faint)' }}>={d.unchanged}</span>
                             </>
                           : <span className="na">–</span>}
                       </td>
@@ -542,7 +542,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
           <span className="mark">⚠</span>
           <span>
             Every figure here is over the student-goal pairs the agent judged{' '}
-            <strong style={{ color: 'var(--text-dim)' }}>both at the start and now</strong>. A pair it has an
+            <strong style={{ color: 'var(--ink)' }}>both at the start and now</strong>. A pair it has an
             opinion about today but had none about then is left out on purpose: counting it would
             report a class improving when the only thing that improved was how much the agent had
             heard. States are the server's own, in its worst→best order ({vocab.understanding_states.map(humanize).join(' · ')}).

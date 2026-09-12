@@ -21,7 +21,7 @@ export function stateIndex(vocab: Vocabularies, state: string): number {
 
 /** Colour for a state, by its rank in the worst→best order. */
 export function stateColor(index: number): string {
-  if (index < 0) return 'var(--state-x)'
+  if (index < 0) return 'var(--state-unassessed)'
   return STATE_RAMP[Math.min(index, STATE_RAMP.length - 1)]
 }
 

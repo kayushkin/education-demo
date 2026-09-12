@@ -82,7 +82,7 @@ export function TeamDrawer({ vocab, state, teamID, messages, truth, now, onClose
                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>{g.ordinal}. {g.short_label}</span>
                   {stranded && <span className="pill pill-alarm">nobody understands this</span>}
-                  <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-ghost)' }}>
+                  <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink-faint)' }}>
                     {c ? `${c.assessed}/${c.roster}` : 'not yet assessed'}
                   </span>
                 </div>
@@ -109,7 +109,7 @@ export function TeamDrawer({ vocab, state, teamID, messages, truth, now, onClose
               <tr key={s.id}>
                 <th>
                   <button className="who" onClick={() => onOpenStudent(s.id)}>
-                    {s.is_human && <span style={{ color: 'var(--violet)' }}>◈ </span>}{s.name}
+                    {s.is_human && <span style={{ color: 'var(--accent-ink)' }}>◈ </span>}{s.name}
                   </button>
                 </th>
                 {state.goals.map((g) => {
@@ -122,7 +122,7 @@ export function TeamDrawer({ vocab, state, teamID, messages, truth, now, onClose
                             <StateMark vocab={vocab} state={st} size="sm" />
                             {tr && tr !== st && <StateMark vocab={vocab} state={tr} size="sm" hollow />}
                           </span>
-                        : <span style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>–</span>}
+                        : <span style={{ color: 'var(--ink-faint)', fontFamily: 'var(--font-num)', fontSize: 10 }}>–</span>}
                     </td>
                   )
                 })}
@@ -131,7 +131,7 @@ export function TeamDrawer({ vocab, state, teamID, messages, truth, now, onClose
           </tbody>
         </table>
         {truthFor && (
-          <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 7 }}>
+          <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 7 }}>
             A hollow mark beside a solid one is the hidden truth where the agent disagreed.
           </div>
         )}
