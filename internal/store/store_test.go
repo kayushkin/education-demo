@@ -284,3 +284,43 @@ func TestTokenAuthenticatesTheRightSeat(t *testing.T) {
 		t.Error("an empty token resolved to a seat")
 	}
 }
+
+// TestTranscriptTailIsOldestFirst pins the ordering the monitor depends on.
+//
+// ListTeamMessagesTail takes the NEWEST n rows and must hand them back
+// oldest-first. Get this backwards and the model reads every conversation in
+// reverse — an answer before its question — and silently misjudges who
+// corrected whom. It cannot fail loudly, so it is pinned here.
+func TestTranscriptTailIsOldestFirst(t *testing.T) {
+	st := newTestStore(t)
+	sessionID, teamID, studentID, _ := seedSession(t, st)
+
+	for i := 0; i < 10; i++ {
+		if err := st.AppendMessage(&model.Message{
+			ID: uuid.NewString(), SessionID: sessionID, TeamID: teamID,
+			StudentID: studentID, Body: string(rune('0' + i)), At: time.Now(),
+		}); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	// Ask for the last four of ten.
+	tail, err := st.ListTeamMessagesTail(teamID, 4)
+	if err != nil {
+		t.Fatalf("tail: %v", err)
+	}
+	if len(tail) != 4 {
+		t.Fatalf("got %d messages, want 4", len(tail))
+	}
+	if got, want := tail[0].Body, "6"; got != want {
+		t.Errorf("first of tail = %q, want %q (the oldest of the newest four)", got, want)
+	}
+	if got, want := tail[3].Body, "9"; got != want {
+		t.Errorf("last of tail = %q, want %q (the newest)", got, want)
+	}
+	for i := 1; i < len(tail); i++ {
+		if tail[i].Seq <= tail[i-1].Seq {
+			t.Fatalf("tail is not ascending by seq: %d then %d", tail[i-1].Seq, tail[i].Seq)
+		}
+	}
+}
