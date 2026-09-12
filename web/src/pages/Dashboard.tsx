@@ -3,13 +3,14 @@ import { Link, useSearchParams } from 'react-router-dom'
 import * as api from '../lib/api'
 import { sinceLabel } from '../lib/display'
 import { useLiveSession, useNow, useVocabularies } from '../lib/hooks'
-import type { Accuracy, Session, TruthCell } from '../lib/types'
+import type { Accuracy, Progress, Session, TruthCell } from '../lib/types'
 import { AccuracyPanel } from '../components/AccuracyPanel'
 import { AlertFeed } from '../components/AlertFeed'
 import { ClassGrid } from '../components/ClassGrid'
 import { CommandBar } from '../components/CommandBar'
 import { GoalHeatmap } from '../components/GoalHeatmap'
 import { Misconceptions } from '../components/Misconceptions'
+import { ProgressPanel } from '../components/ProgressPanel'
 import { ErrorBanner } from '../components/primitives'
 import { StudentDrawer } from '../components/StudentDrawer'
 import { TeamDrawer } from '../components/TeamDrawer'
@@ -40,6 +41,10 @@ export function Dashboard() {
   const [busyElapsed, setBusyElapsed] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const [progressLoading, setProgressLoading] = useState(false)
+  const [progressError, setProgressError] = useState<string | null>(null)
+
   const [reveal, setReveal] = useState(() => localStorage.getItem(TRUTH_STORAGE_KEY) === '1')
   const [accuracy, setAccuracy] = useState<Accuracy | null>(null)
   const [truth, setTruth] = useState<TruthCell[] | null>(null)
@@ -67,6 +72,30 @@ export function Dashboard() {
 
   const rounds = state?.runner?.rounds ?? 0
   const assessmentCount = state?.assessments.length ?? 0
+  const currentPhase = state?.session.current_phase ?? 0
+
+  const loadProgress = useCallback(async () => {
+    if (!selected) return
+    setProgressLoading(true)
+    try {
+      setProgress(await api.getProgress(selected))
+      setProgressError(null)
+    } catch (e) {
+      setProgressError((e as Error).message)
+    } finally {
+      setProgressLoading(false)
+    }
+  }, [selected])
+
+  // The before/after is recomputed from the assessment grid, so it is stale the
+  // moment the grid moves — and the grid is never pushed down the wire. Same
+  // refetch trigger the ground-truth proof uses. `current_phase` is in there too
+  // because understanding is advanced BETWEEN phases: a phase change moves the
+  // answer even when no new assessment has landed.
+  useEffect(() => {
+    if (!selected) { setProgress(null); return }
+    void loadProgress()
+  }, [selected, rounds, assessmentCount, currentPhase, loadProgress])
 
   const loadProof = useCallback(async () => {
     if (!selected) return
@@ -176,6 +205,12 @@ export function Dashboard() {
               {live.connected && s.status === 'running' && <i className="dot dot-pulse" />}
               {s.status}
             </span>
+            <span className="sep" />
+            {/* A progress number read at phase 1 of 3 is not an end-of-lesson
+                number, so the bar always says which act is playing. */}
+            <span title="The act of the lesson being played now. Understanding is advanced between acts.">
+              phase <b>{s.current_phase}</b>/<b>{s.phase_count}</b>
+            </span>
             {runner && (
               <>
                 <span className="sep" />
@@ -275,6 +310,16 @@ export function Dashboard() {
                 alerts={state.alerts}
                 messages={live.messages}
                 onOpenTeam={setOpenTeam}
+              />
+              <ProgressPanel
+                vocab={vocab}
+                progress={progress}
+                teams={state.teams}
+                loading={progressLoading}
+                error={progressError}
+                reveal={reveal}
+                onRetry={() => void loadProgress()}
+                onOpenStudent={setOpenStudent}
               />
               <GoalHeatmap
                 vocab={vocab}

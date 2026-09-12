@@ -53,7 +53,7 @@ export function ClassGrid({ vocab, students, teams, goals, assessments, truth, o
   return (
     <section className="section">
       <SectionHead
-        n="05"
+        n="06"
         title="Every student"
         hint={
           truthMap

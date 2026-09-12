@@ -25,7 +25,7 @@ export function GoalHeatmap({ vocab, goals, teams, cells, rollups, onOpenTeam }:
   return (
     <section className="section">
       <SectionHead
-        n="03"
+        n="04"
         title="Goals × teams"
         hint={
           <>

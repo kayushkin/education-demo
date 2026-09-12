@@ -46,7 +46,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
   if (error) {
     return (
       <section className="section">
-        <SectionHead n="06" title="Ground truth" />
+        <SectionHead n="07" title="Ground truth" />
         <div className="banner err"><span className="glyph">✕</span><span>{error}</span>
           <button className="btn btn-sm btn-ghost" onClick={onRetry}>Retry</button></div>
       </section>
@@ -56,7 +56,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
   if (loading || !accuracy) {
     return (
       <section className="section">
-        <SectionHead n="06" title="Ground truth" />
+        <SectionHead n="07" title="Ground truth" />
         <div className="proof">
           <div className="generating" style={{ padding: '34px 20px' }}>
             <span className="scan" />
@@ -73,7 +73,7 @@ export function AccuracyPanel({ vocab, accuracy, loading, error, onRetry }: {
   return (
     <section className="section">
       <SectionHead
-        n="06"
+        n="07"
         title="Ground truth"
         right={<span className="pill pill-violet" style={{ marginLeft: 'auto' }}>revealed</span>}
       />

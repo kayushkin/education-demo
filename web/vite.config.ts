@@ -14,7 +14,7 @@ export default defineConfig({
     // Dev proxies to the Go server running at the root, so the same relative
     // API paths work in dev and behind nginx.
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8316', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:8398', changeOrigin: true },
     },
   },
 })

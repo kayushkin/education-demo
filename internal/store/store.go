@@ -35,6 +35,14 @@ func Open(path string) (*Store, error) {
 	// SQLite takes one writer at a time; letting database/sql open many
 	// connections buys nothing and turns lock contention into SQLITE_BUSY.
 	db.SetMaxOpenConns(1)
+	// Migrations first: schema.sql's CREATE ... IF NOT EXISTS statements do
+	// nothing to a table that already exists, so a newly added column only
+	// reaches an existing database through here — and the indexes below name
+	// those columns.
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	if _, err := db.Exec(schemaSQL); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)

@@ -20,7 +20,24 @@ func (s *Server) mountStatic(mux *http.ServeMux, basePath string) {
 		prefix = "/"
 	}
 
+	apiPrefix := basePath + "/api/"
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// An unmatched API path must NOT fall through to the single-page app.
+		//
+		// It did, and the result was that every mistyped or not-yet-deployed
+		// API route answered 200 with index.html. A caller checking the status
+		// code sees success and has to notice the content-type to find out it
+		// got a web page — which is exactly how a stale deployment hides. Any
+		// client, and any check of whether a route exists, is misled by it.
+		if strings.HasPrefix(r.URL.Path, apiPrefix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"reason":"unknown_route",` +
+				`"error":"no such API route on this server"}` + "\n"))
+			return
+		}
+
 		rel := strings.TrimPrefix(r.URL.Path, basePath)
 		if rel == "" || rel == "/" {
 			serveIndex(w, r, dir)

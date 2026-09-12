@@ -939,3 +939,180 @@ a:hover { text-decoration: underline; }
 .table-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 .table-scroll::-webkit-scrollbar { height: 6px; }
 .table-scroll::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+
+/* ===========================================================================
+   Learning this session — before → after
+   ===========================================================================
+   Dumbbells on one shared 0–100% axis, one row per goal. The change is a drawn
+   object: the segment's length is its size and its direction is its sign, so a
+   goal that went backwards is a shape difference before it is a colour one.
+   Direction is carried four times over — dot position, arrow glyph, signed
+   number, then colour — so colour is never the only channel.
+   ------------------------------------------------------------------------ */
+
+.learn { padding: 18px; }
+.learn .headline { margin-bottom: 16px; }
+.learn .headline .big { color: var(--live); }
+
+.truth-check {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin-top: 14px; padding: 11px 13px;
+  border: 1px solid rgba(169,139,245,.34); border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(169,139,245,.09), transparent 70%);
+  font-size: 12px; line-height: 1.5; color: var(--text-dim);
+}
+.truth-check .pill { flex: none; margin-top: 1px; }
+.truth-check strong { color: var(--text); font-family: var(--font-mono); font-weight: 600; }
+
+/* ---- the shared axis, stated once above the rows ------------------------ */
+
+.ba-axis {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin: 22px 0 8px; padding-bottom: 7px; border-bottom: 1px solid var(--rule-faint);
+}
+.ba-ticks {
+  flex: 1 1 260px; display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost);
+  letter-spacing: .06em; font-style: normal;
+}
+.ba-ticks i { font-style: normal; }
+
+.ba-list { display: flex; flex-direction: column; gap: 10px; }
+
+.ba-row {
+  padding: 11px 13px; border-radius: var(--r);
+  border: 1px solid var(--rule); background: var(--ink-100);
+  border-left: 3px solid var(--rule-strong);
+}
+/* A goal that went backwards is the one to act on: it gets the console's
+   existing alarm surface, the same one a stranded team card gets. */
+.ba-row[data-good='worse'] {
+  border-left-color: var(--alarm);
+  border-color: rgba(255,107,74,.4);
+  background: linear-gradient(180deg, rgba(255,107,74,.085), transparent 62%), var(--ink-100);
+}
+.ba-row[data-good='better'] { border-left-color: var(--live); }
+.ba-row[data-good='flat']   { border-left-color: var(--text-mute); }
+.ba-row[data-good='none']   { border-left-color: var(--state-x); }
+
+.ba-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; }
+.ba-head .ord { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost); }
+.ba-head .lab { font-size: 12.5px; font-weight: 600; }
+.ba-head .ba-pairs {
+  margin-left: auto; font-family: var(--font-mono); font-size: 9.5px;
+  color: var(--text-ghost); letter-spacing: .05em; white-space: nowrap;
+}
+
+/* track | readout, so every row's axis starts at the same x */
+.ba-lines {
+  display: grid; grid-template-columns: minmax(0, 1fr) 218px;
+  gap: 5px 14px; align-items: center;
+}
+
+.ba-track { position: relative; height: 18px; display: flex; align-items: center; min-width: 0; }
+.ba-track.sm { height: 13px; }
+/* The dots are 11px wide and sit ON their value, so the scale is inset by half
+   a dot at each end — otherwise 0% and 100% hang outside the track. */
+.ba-scale { position: relative; flex: 1; height: 100%; margin: 0 6px; }
+
+.ba-grid { position: absolute; inset: 0; border-radius: 2px;
+  background:
+    linear-gradient(90deg, var(--rule-faint) 1px, transparent 1px) 0 0 / 25% 100%,
+    linear-gradient(90deg, transparent calc(100% - 1px), var(--rule-faint) calc(100% - 1px)) 0 0 / 100% 100%;
+}
+.ba-track::before {
+  content: ''; position: absolute; left: 0; right: 0; height: 1px;
+  background: var(--rule-faint);
+}
+
+.ba-seg {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  height: 5px; border-radius: 3px; min-width: 2px;
+  background: var(--text-mute);
+}
+.ba-track.sm .ba-seg { height: 3px; }
+.ba-track[data-good='better'] .ba-seg { background: var(--live); }
+.ba-track[data-good='worse']  .ba-seg { background: var(--alarm); }
+.ba-track[data-good='flat']   .ba-seg { background: var(--ink-300); }
+
+.ba-dot {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box;
+}
+.ba-track.sm .ba-dot { width: 9px; height: 9px; }
+/* hollow = where it started, solid = where it is now. Position alone says which
+   way it went; nothing here depends on telling two hues apart. */
+.ba-dot.before { background: var(--ink-050); border: 2px solid var(--text-mute); z-index: 1; }
+.ba-dot.after  { background: var(--dot, var(--live)); border: 2px solid var(--ink-100); z-index: 2; }
+
+.ba-na {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-ghost); padding-left: 6px;
+}
+
+.ba-read {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 11.5px;
+  color: var(--text-mute); min-width: 0;
+}
+.ba-read .ba-measure {
+  font-size: 9.5px; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--text-ghost); width: 86px; flex: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ba-read .ba-nums { color: var(--text-dim); white-space: nowrap; }
+.ba-read .ba-nums b { color: var(--text); font-weight: 600; }
+.ba-read .ba-nums small { font-size: 9px; color: var(--text-ghost); }
+.ba-read .ba-nums.na { color: var(--text-ghost); }
+.ba-read .ba-arrow { font-style: normal; color: var(--text-ghost); margin: 0 3px; }
+.ba-read .ba-delta { margin-left: auto; font-size: 10.5px; white-space: nowrap; color: var(--text-mute); }
+.ba-read[data-good='better'] .ba-delta { color: var(--live); }
+.ba-read[data-good='worse']  .ba-delta { color: var(--alarm); }
+.ba-read.truth .ba-measure, .ba-read.truth .ba-nums b { color: var(--violet); }
+
+/* the four-state composition, demoted to under the headline it supports */
+.ba-comp {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px;
+  align-items: center; margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--rule-faint);
+}
+.ba-comp .eyebrow { font-size: 9px; }
+
+/* ---- per student -------------------------------------------------------- */
+
+.learn-students { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.learn-students-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.sort-by { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.sort-by .select { width: auto; font-size: 12px; padding: 5px 28px 5px 9px; }
+
+.progress-table { min-width: 700px; }
+.progress-table th { white-space: nowrap; }
+.progress-table td { vertical-align: middle; }
+.progress-table td:first-child, .progress-table th:first-child { text-align: left; }
+.progress-table td.dim { color: var(--text-ghost); text-align: left; }
+.progress-table td.track-cell { width: 130px; min-width: 130px; padding: 4px 9px; }
+.progress-table td.nums { white-space: nowrap; color: var(--text-dim); }
+.progress-table td.nums b { color: var(--text); font-weight: 600; }
+.progress-table td.nums .na { color: var(--text-ghost); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.progress-table td.nums[data-good='better'] .ba-delta { color: var(--live); }
+.progress-table td.nums[data-good='worse']  .ba-delta { color: var(--alarm); }
+.progress-table td.nums.truth b { color: var(--violet); }
+.progress-table td.moved { white-space: nowrap; font-size: 10.5px; }
+.progress-table .who { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.progress-table .who:hover { color: var(--live); }
+/* The rows the teacher follows up with carry a left edge, so they are findable
+   after the sort order has been changed to something else. */
+.progress-table tr[data-good='worse'] td:first-child { box-shadow: inset 2px 0 0 var(--alarm); }
+.progress-table tr[data-good='better'] td:first-child { box-shadow: inset 2px 0 0 rgba(79,199,232,.5); }
+
+@media (max-width: 760px) {
+  /* The readout column cannot sit beside a track on a phone — the track
+     collapses to nothing. Stack them: track, then its numbers. */
+  .ba-lines { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .ba-read { margin-bottom: 6px; }
+  .ba-read .ba-measure { width: 76px; }
+  .learn { padding: 14px 12px; }
+  .ba-head .ba-pairs { margin-left: 0; flex-basis: 100%; }
+  .sort-by { margin-left: 0; flex-basis: 100%; }
+  .sort-by .select { flex: 1; }
+}

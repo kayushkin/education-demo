@@ -19,7 +19,7 @@ export function Misconceptions({ items, goals, teams, onOpenTeam }: {
   return (
     <section className="section">
       <SectionHead
-        n="04"
+        n="05"
         title="What to reteach"
         hint="Every wrong idea the agent heard, ranked by how often it was said and by how many rooms it reached."
       />

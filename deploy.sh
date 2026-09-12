@@ -84,6 +84,28 @@ if ! curl -sf http://127.0.0.1:8316/education-demo/api/health >/dev/null 2>&1; t
 fi
 health="$(curl -s http://127.0.0.1:8316/education-demo/api/health)"
 echo "    $health"
+
+# Confirm the RUNNING process is the binary just built, not a survivor of a
+# restart that silently failed.
+#
+# "Is it deployed?" was answered wrongly once by reading a route's status code,
+# because an unmatched API path used to answer 200 with index.html. Comparing
+# build ids answers it directly and cannot be fooled that way.
+built_id="$(go version -m "$BINARY" | awk -F= '$1 ~ /[[:space:]]vcs\.revision$/ {print $2}')"
+running_pid="$(systemctl --user show -p MainPID --value "$SERVICE" 2>/dev/null || true)"
+if [ -n "$running_pid" ] && [ "$running_pid" != "0" ]; then
+  running_exe="$(readlink -f "/proc/$running_pid/exe" 2>/dev/null || true)"
+  if [ -n "$running_exe" ]; then
+    running_id="$(go version -m "$running_exe" 2>/dev/null | awk -F= '$1 ~ /[[:space:]]vcs\.revision$/ {print $2}')"
+    if [ -n "$built_id" ] && [ "$running_id" != "$built_id" ]; then
+      echo "    FAILED: the running process is not the binary just built." >&2
+      echo "      built:   $built_id" >&2
+      echo "      running: ${running_id:-unknown}" >&2
+      exit 1
+    fi
+    echo "    running binary matches the build (${built_id:-unstamped})"
+  fi
+fi
 case "$health" in
   *'"agent_ready":false'*)
     # Not fatal, but it decides whether the demo is real or canned, so it is
