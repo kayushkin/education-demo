@@ -464,6 +464,13 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .alert.top-priority .alert-kind { color: var(--alert-ink); }
 .alert.top-priority .pill-alarm { background: var(--alert-strong); color: #fff; }
 .alert.top-priority .pill-mute { background: rgba(255,255,255,.62); }
+/* The faint ink is tuned for white and paper; on the alert's rose wash it
+   measured 4.86:1 — passing, but only 0.36 above the floor, so any future
+   deepening of the tint would silently break it. Inside this one card the
+   quiet text steps up a rung: 6.33:1, with room to move. */
+.alert.top-priority .alert-where,
+.alert.top-priority .alert-foot,
+.alert.top-priority .alert-foot .btn-ghost { color: #5c5349; }
 
 @media (prefers-reduced-motion: reduce) {
   .alert, .dot-pulse, .skel::after, .scan::after { animation: none !important; }
@@ -979,6 +986,12 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
      is deliberately NOT one of these — an unlabelled 36x20 switch is unusable,
      and it was measured rendering 0x0 when it carried this class. */
   .cmdbar .hide-sm { display: none; }
+  /* ...but the readout is not decoration: it carries whether the lesson is
+     running and which act is playing. Hidden, a teacher could hit "Assess now"
+     with no idea the session was paused, and read a progress number without
+     knowing it was taken at act 1 of 3. It stays, narrowed to those two facts. */
+  .cmdbar .readout.hide-sm { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+  .cmdbar .readout .sep { display: none; }
   .toggle-label { font-size: 12.5px; }
   /* A full-width spacer is a line break: the controls drop to their own row
      where all of them fit. */
