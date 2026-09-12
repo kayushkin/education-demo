@@ -16,6 +16,12 @@ SERVICE="education-demo.service"
 BINARY="education-demo-server"
 UNIT_DEST="$HOME/.config/systemd/user/$SERVICE"
 NGINX_SITE="/etc/nginx/sites-enabled/kayushkin.com"
+# nginx.conf does `include /etc/nginx/sites-enabled/*` — EVERY file, not just
+# the ones without a suffix. A backup written beside the original is therefore
+# loaded as a second copy of the whole vhost, and nginx warns about a
+# conflicting server name and silently ignores one of them. Backups go outside
+# the included directory.
+NGINX_BACKUP_DIR="/etc/nginx/backups"
 PUBLIC_URL="https://kayushkin.com/education-demo"
 
 cd "$REPO_DIR"
@@ -92,7 +98,8 @@ if sudo -n grep -q "location /education-demo" "$NGINX_SITE" 2>/dev/null; then
   echo "    location already present"
 else
   echo "    inserting location before the catch-all"
-  sudo -n cp "$NGINX_SITE" "$NGINX_SITE.bak.$(date +%s)"
+  sudo -n mkdir -p "$NGINX_BACKUP_DIR"
+  sudo -n cp "$NGINX_SITE" "$NGINX_BACKUP_DIR/kayushkin.com.bak.$(date +%s)"
   # Insert before the final `location / {` so the more specific prefix wins.
   sudo -n python3 - "$NGINX_SITE" "$REPO_DIR/nginx-education-demo.conf" <<'PY'
 import sys
@@ -111,6 +118,15 @@ with open(site, "w") as f:
     f.write(text)
 PY
   sudo -n nginx -t
+  # A conflicting server name means a stray vhost copy is being loaded — most
+  # likely a backup someone left in sites-enabled. Refuse rather than reload
+  # into a config where one of two identical vhosts is silently ignored.
+  if sudo -n nginx -t 2>&1 | grep -q "conflicting server name"; then
+    echo "    REFUSING TO RELOAD: nginx reports a conflicting server name." >&2
+    echo "    Something in /etc/nginx/sites-enabled/ duplicates a vhost." >&2
+    sudo -n nginx -t 2>&1 | grep "conflicting server name" >&2
+    exit 1
+  fi
   sudo -n systemctl reload nginx
 fi
 
