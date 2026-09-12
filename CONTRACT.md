@@ -104,7 +104,7 @@ the dashboard.
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/sessions/{id}/accuracy` | Scores the agent against the simulation's hidden ground truth. |
-| `GET` | `/api/sessions/{id}/truth` | `[{student_id, goal_id, phase, state}]` — the hidden variable, revealed, **one row per phase**. |
+| `GET` | `/api/sessions/{id}/truth` | `[{student_id, goal_id, phase, state}]` — the hidden variable, revealed, **one row per phase** so you can see the whole arc. `?phase=N` for a single act. |
 
 ```
 {scored, truth_pairs, correct, exact_pct, adjacent_pct,

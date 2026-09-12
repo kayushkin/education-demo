@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -745,7 +746,29 @@ func truthsToTruthlike(in []model.Truth) []model.Truthlike {
 // exists only because the students are synthetic. A real deployment would not
 // have it, because there would be nothing behind it.
 func (s *Server) handleTruth(w http.ResponseWriter, r *http.Request) {
-	truths, err := s.cfg.Store.ListTruths(r.PathValue("id"))
+	sessionID := r.PathValue("id")
+
+	// Every phase by default, so a caller can see the whole arc; ?phase=N for
+	// one act. Returning only the current phase silently — which this did —
+	// contradicted the documented shape and would have left a truth overlay
+	// unable to show what a student started out understanding.
+	if raw := r.URL.Query().Get("phase"); raw != "" {
+		phase, err := strconv.Atoi(raw)
+		if err != nil || phase < 1 {
+			writeError(w, http.StatusBadRequest, "bad_phase",
+				"phase must be a positive whole number")
+			return
+		}
+		truths, err := s.cfg.Store.ListTruthsAtPhase(sessionID, phase)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, truths)
+		return
+	}
+
+	truths, err := s.cfg.Store.ListAllTruths(sessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
 		return

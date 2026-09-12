@@ -335,6 +335,18 @@ func (s *Store) ListTruthsAtPhase(sessionID string, phase int) ([]model.Truth, e
 	return scanTruths(rows)
 }
 
+// ListAllTruths returns ground truth for EVERY phase — the whole arc.
+func (s *Store) ListAllTruths(sessionID string) ([]model.Truth, error) {
+	rows, err := s.db.Query(
+		`SELECT t.student_id, t.goal_id, t.phase, t.state FROM truths t
+		 JOIN students st ON st.id = t.student_id
+		 WHERE st.session_id = ? ORDER BY t.phase`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return scanTruths(rows)
+}
+
 // MaxTruthPhase is the last phase ground truth was written for.
 func (s *Store) MaxTruthPhase(sessionID string) (int, error) {
 	var n sql.NullInt64
