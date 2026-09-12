@@ -18,14 +18,27 @@ import (
 // student-goal pair. Values are relative, not required to sum to anything.
 type StateWeights map[model.UnderstandingState]int
 
-// DefaultStateWeights describes a class that has been taught the material once
-// and mostly followed it. Misunderstanding is rarer than not-knowing, which is
-// what makes it worth alerting on.
+// DefaultStateWeights is where a class STARTS: the material has been presented
+// once and about a third of them have it.
+//
+// These are the opening odds, not the shape of the session. Understanding is
+// advanced between phases by the peer-learning rule in learning.go, and over
+// three phases these weights measure out at roughly:
+//
+//	understood      34% -> 67%     (it doubles; the group teaches itself)
+//	misunderstands   8% ->  5%     (most wrong ideas get corrected by a peer)
+//	team-goals improving                  69%, none go backwards on understanding
+//	teams still stuck on a goal at the end 15%   (what the teacher must reach)
+//	the lone-misinformer case              6%    of team-goal phases
+//
+// Misunderstanding is deliberately the rarest opening state. It is rare again
+// as an OUTCOME for a different reason: correcting it only needs one person in
+// the group who can explain, and with three to a team that is usually true.
 var DefaultStateWeights = StateWeights{
-	model.StateUnderstands:    40,
-	model.StatePartial:        30,
-	model.StateUnknown:        18,
-	model.StateMisunderstands: 12,
+	model.StateUnderstands:    34,
+	model.StatePartial:        32,
+	model.StateUnknown:        26,
+	model.StateMisunderstands: 8,
 }
 
 func (w StateWeights) draw(rng *rand.Rand) model.UnderstandingState {
@@ -68,6 +81,10 @@ type Blueprint struct {
 	Weights    StateWeights
 	PlantDrama bool
 	Seed       int64
+	// PhaseCount is how many segments the lesson runs in. Understanding is
+	// advanced between them, so this is the only reason the beginning and the
+	// end of a session differ at all.
+	PhaseCount int
 }
 
 // Built is the seeded classroom, returned for the caller to persist.
@@ -76,7 +93,11 @@ type Built struct {
 	Goals    []model.Goal
 	Teams    []model.Team
 	Students []model.Student
-	Truths   []model.Truth
+	// PhaseTruths[i] is the ground truth during phase i+1. The first is drawn,
+	// the rest are advanced by the peer-learning rule. Keeping every phase is
+	// what lets the dashboard answer "what changed over the lesson" exactly
+	// rather than inferring it from the agent's own shifting opinion.
+	PhaseTruths []model.PhaseTruth
 	// Planted names the scenarios forced into the ground truth, so the demo
 	// script and the README can state plainly what was arranged rather than
 	// implying the agent found something the simulation did not put there.
@@ -144,6 +165,12 @@ func Build(bp Blueprint) (*Built, error) {
 		})
 	}
 
+	phases := bp.PhaseCount
+	if phases <= 0 {
+		phases = DefaultPhaseCount
+	}
+
+	// Phase 1: drawn.
 	truth := map[string]map[string]model.UnderstandingState{}
 	for _, st := range out.Students {
 		truth[st.ID] = map[string]model.UnderstandingState{}
@@ -151,63 +178,90 @@ func Build(bp Blueprint) (*Built, error) {
 			truth[st.ID][g.ID] = weights.draw(rng)
 		}
 	}
-
 	if bp.PlantDrama {
-		plantScenarios(rng, out, truth)
+		plantLoneMisinformer(rng, out, truth)
 	}
+	out.PhaseTruths = append(out.PhaseTruths, snapshotTruth(1, out.Students, out.Goals, truth))
 
+	// Phases 2..n: advanced, one team and one goal at a time, because that is
+	// the unit the learning actually happens in — who is sitting with you
+	// decides whether you get it.
+	membersByTeam := map[string][]model.Student{}
 	for _, st := range out.Students {
-		for _, g := range out.Goals {
-			out.Truths = append(out.Truths, model.Truth{
-				StudentID: st.ID, GoalID: g.ID, State: truth[st.ID][g.ID],
-			})
+		membersByTeam[st.TeamID] = append(membersByTeam[st.TeamID], st)
+	}
+	for phase := 2; phase <= phases; phase++ {
+		for _, team := range out.Teams {
+			members := membersByTeam[team.ID]
+			for _, g := range out.Goals {
+				before := make([]model.UnderstandingState, len(members))
+				for i, st := range members {
+					before[i] = truth[st.ID][g.ID]
+				}
+				after := AdvanceTeamGoal(rng, before)
+				for i, st := range members {
+					truth[st.ID][g.ID] = after[i]
+				}
+			}
 		}
+		out.PhaseTruths = append(out.PhaseTruths, snapshotTruth(phase, out.Students, out.Goals, truth))
 	}
 	return out, nil
 }
 
-// plantScenarios forces the three situations the teacher most needs to catch,
-// so a short demo reliably contains all of them.
-func plantScenarios(rng *rand.Rand, b *Built, truth map[string]map[string]model.UnderstandingState) {
+// snapshotTruth freezes the current state as one phase's record.
+func snapshotTruth(phase int, students []model.Student, goals []model.Goal,
+	truth map[string]map[string]model.UnderstandingState) model.PhaseTruth {
+
+	out := model.PhaseTruth{Phase: phase}
+	for _, st := range students {
+		for _, g := range goals {
+			out.Truths = append(out.Truths, model.Truth{
+				StudentID: st.ID, GoalID: g.ID, Phase: phase, State: truth[st.ID][g.ID],
+			})
+		}
+	}
+	return out
+}
+
+// plantLoneMisinformer forces exactly ONE instance of the situation this tool
+// exists to catch: a group where nobody can explain a goal and one member is
+// confidently wrong about it, so their account is the only one in the room.
+//
+// Only one, and only this one. The earlier version planted a stuck group AND a
+// confident explainer as separate arrangements, which made both look common.
+// They are not: the rule in learning.go reaches this state on its own in about
+// 6% of team-goal phases, and everywhere else the group teaches itself. What
+// planting buys is that a five-minute demo reliably contains one, not that the
+// class is full of them.
+//
+// It is named in Built.Planted rather than hidden, so nobody reads the agent
+// finding it as the agent finding something nobody put there.
+func plantLoneMisinformer(rng *rand.Rand, b *Built,
+	truth map[string]map[string]model.UnderstandingState) {
+
 	byTeam := map[string][]model.Student{}
 	for _, st := range b.Students {
 		byTeam[st.TeamID] = append(byTeam[st.TeamID], st)
 	}
+	team := b.Teams[rng.Intn(len(b.Teams))]
+	goal := b.Goals[rng.Intn(len(b.Goals))]
+	members := byTeam[team.ID]
+	if len(members) == 0 {
+		return
+	}
 
-	// 1. One team where nobody understands one goal: the team cannot teach
-	//    itself out of it, which is exactly when the teacher must intervene.
-	stuckTeam := b.Teams[rng.Intn(len(b.Teams))]
-	stuckGoal := b.Goals[rng.Intn(len(b.Goals))]
-	for _, st := range byTeam[stuckTeam.ID] {
-		if truth[st.ID][stuckGoal.ID] == model.StateUnderstands {
-			truth[st.ID][stuckGoal.ID] = model.StateUnknown
+	speaker := members[rng.Intn(len(members))]
+	truth[speaker.ID][goal.ID] = model.StateMisunderstands
+	// Everyone else is left unable to challenge it: no explainer, and not two
+	// partial holders either, which is exactly the climate the learning rule
+	// treats as misinformation spreading.
+	for _, st := range members {
+		if st.ID != speaker.ID {
+			truth[st.ID][goal.ID] = model.StateUnknown
 		}
 	}
 	b.Planted = append(b.Planted, fmt.Sprintf(
-		"%s: nobody understands goal %d (%s)", stuckTeam.Name, stuckGoal.Ordinal, stuckGoal.ShortLabel))
-
-	// 2. A confidently wrong explainer on a different team: one student who
-	//    misunderstands a goal their teammates have not got either, so the
-	//    error spreads instead of being corrected.
-	var loudTeam model.Team
-	for {
-		loudTeam = b.Teams[rng.Intn(len(b.Teams))]
-		if loudTeam.ID != stuckTeam.ID || len(b.Teams) == 1 {
-			break
-		}
-	}
-	loudGoal := b.Goals[rng.Intn(len(b.Goals))]
-	members := byTeam[loudTeam.ID]
-	if len(members) > 0 {
-		explainer := members[rng.Intn(len(members))]
-		truth[explainer.ID][loudGoal.ID] = model.StateMisunderstands
-		for _, st := range members {
-			if st.ID != explainer.ID && truth[st.ID][loudGoal.ID] == model.StateUnderstands {
-				truth[st.ID][loudGoal.ID] = model.StatePartial
-			}
-		}
-		b.Planted = append(b.Planted, fmt.Sprintf(
-			"%s: %s confidently wrong about goal %d (%s)",
-			loudTeam.Name, explainer.Name, loudGoal.Ordinal, loudGoal.ShortLabel))
-	}
+		"%s: %s is confidently wrong about goal %d (%s) and nobody there can correct it",
+		team.Name, speaker.Name, goal.Ordinal, goal.ShortLabel))
 }

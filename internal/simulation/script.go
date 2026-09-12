@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 
@@ -15,7 +16,10 @@ import (
 
 const scriptSystemPrompt = `You write realistic transcripts of school students working in a small breakout group.
 
-You are given each student's TRUE understanding of each learning goal. Write dialogue that REVEALS that understanding through what they say, and never states it. Nobody announces "I partially understand goal 2".
+The transcript runs in ACTS. For each act you are given each student's TRUE understanding of each learning goal AT THAT POINT. Write dialogue that REVEALS that understanding through what they say, and never states it. Nobody announces "I partially understand goal 2".
+
+THE UNDERSTANDING CHANGES BETWEEN ACTS, AND YOUR DIALOGUE MUST BE WHY.
+This is the most important thing you do. If a student is "unknown" in act 1 and "partial" in act 2, then somewhere in act 1 or 2 a teammate explained it to them and they got part of it -- write that exchange. If someone is "misunderstands" in act 1 and "partial" in act 2, write the moment they were corrected and the penny half-dropped. Learning must happen ON THE PAGE, through students talking to each other. Never let a student silently arrive at a new state between acts.
 
 How each true state sounds:
 - understands: explains it correctly, often to someone else; uses the right causal language; can answer a follow-up.
@@ -28,14 +32,18 @@ Rules:
 - Short, natural, texting-register lines. Most under 25 words. Some very short ("yeah", "wait what").
 - Real groups drift: a little off-topic chat is fine and makes the signal harder, which is the point.
 - Spread the dialogue across ALL the goals, not just the first.
-- Write 26 to 34 lines total.
-- gap_seconds is the pause BEFORE the line: 2-12, larger after a question nobody wants to answer.`
+- Write 12 to 16 lines PER ACT.
+- Every line carries the act number it belongs to.
+- gap_seconds is the pause BEFORE the line: 2-12, larger after a question nobody wants to answer.
+
+If a student's state is UNCHANGED across every act, they simply never get there -- do not invent progress the states do not show. A group where nobody understands a goal and one person is confidently wrong should get WORSE at it, with the wrong idea being copied down.`
 
 // lineOut is one scripted utterance as the model returns it.
 type lineOut struct {
 	Speaker    string `json:"speaker"`
 	Body       string `json:"body"`
 	GapSeconds int    `json:"gap_seconds"`
+	Act        int    `json:"act"`
 }
 
 type scriptOut struct {
@@ -53,8 +61,9 @@ var scriptSchema = map[string]any{
 					"speaker":     map[string]any{"type": "string", "description": "exact student name"},
 					"body":        map[string]any{"type": "string"},
 					"gap_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 15},
+					"act":         map[string]any{"type": "integer", "description": "which act this line is in, starting at 1"},
 				},
-				"required": []string{"speaker", "body", "gap_seconds"},
+				"required": []string{"speaker", "body", "gap_seconds", "act"},
 			},
 		},
 	},
@@ -66,8 +75,10 @@ type ScriptRequest struct {
 	Team     model.Team
 	Goals    []model.Goal
 	Students []model.Student
-	// Truth maps student id -> goal id -> state.
-	Truth map[string]map[string]model.UnderstandingState
+	// PhaseTruth[i] maps student id -> goal id -> state during act i+1. The
+	// model is shown all of them at once so it can write the transitions
+	// between them as dialogue rather than having them appear by magic.
+	PhaseTruth []map[string]map[string]model.UnderstandingState
 	// Flavour is an optional extra instruction for this team, used to plant a
 	// conflict or a disengaged student.
 	Flavour string
@@ -79,17 +90,31 @@ func (r ScriptRequest) prompt() string {
 	for _, g := range r.Goals {
 		fmt.Fprintf(&b, "  Goal %d: %s\n", g.Ordinal, g.Text)
 	}
-	b.WriteString("\nSTUDENTS AND THEIR TRUE UNDERSTANDING (never state this aloud):\n")
-	for _, st := range r.Students {
-		fmt.Fprintf(&b, "  %s:\n", st.Name)
-		for _, g := range r.Goals {
-			fmt.Fprintf(&b, "    Goal %d (%s): %s\n", g.Ordinal, g.ShortLabel, r.Truth[st.ID][g.ID])
+
+	for act, truth := range r.PhaseTruth {
+		fmt.Fprintf(&b, "\n=== ACT %d — true understanding during this act ===\n", act+1)
+		for _, st := range r.Students {
+			fmt.Fprintf(&b, "  %s:\n", st.Name)
+			for _, g := range r.Goals {
+				state := truth[st.ID][g.ID]
+				line := fmt.Sprintf("    Goal %d (%s): %s", g.Ordinal, g.ShortLabel, state)
+				// Name the change explicitly rather than making the model
+				// diff two tables in its head. The transitions are the point
+				// of the whole transcript, so they are spelled out.
+				if act > 0 {
+					if was := r.PhaseTruth[act-1][st.ID][g.ID]; was != state {
+						line += fmt.Sprintf("   <-- CHANGED from %s; your dialogue must show why", was)
+					}
+				}
+				b.WriteString(line + "\n")
+			}
 		}
 	}
+
 	if r.Flavour != "" {
 		fmt.Fprintf(&b, "\nADDITIONAL DIRECTION FOR THIS GROUP:\n%s\n", r.Flavour)
 	}
-	b.WriteString("\nWrite the transcript now.")
+	fmt.Fprintf(&b, "\nWrite all %d acts now, in order.", len(r.PhaseTruth))
 	return b.String()
 }
 
@@ -161,6 +186,13 @@ func (w *Writer) writeOne(ctx context.Context, sessionID string, req ScriptReque
 	for _, st := range req.Students {
 		byName[strings.ToLower(strings.TrimSpace(st.Name))] = st
 	}
+	// Lines are re-ordered by act before numbering. The model usually emits
+	// them in order, but a single act label out of place would otherwise play
+	// the lesson out of sequence and advance the session's phase backwards.
+	sort.SliceStable(parsed.Lines, func(i, j int) bool {
+		return parsed.Lines[i].Act < parsed.Lines[j].Act
+	})
+
 	out := []store.ScriptedLine{}
 	ord := 0
 	for _, l := range parsed.Lines {
@@ -179,10 +211,17 @@ func (w *Writer) writeOne(ctx context.Context, sessionID string, req ScriptReque
 		if gap > 15 {
 			gap = 15
 		}
+		act := l.Act
+		if act < 1 {
+			act = 1
+		}
+		if act > len(req.PhaseTruth) {
+			act = len(req.PhaseTruth)
+		}
 		ord++
 		out = append(out, store.ScriptedLine{
 			ID: uuid.NewString(), SessionID: sessionID, TeamID: req.Team.ID,
-			StudentID: st.ID, Ordinal: ord, Body: body, GapMs: gap * 1000,
+			StudentID: st.ID, Ordinal: ord, Body: body, GapMs: gap * 1000, Phase: act,
 		})
 	}
 	if len(out) == 0 {
@@ -225,11 +264,12 @@ func fallbackScript(sessionID string, req ScriptRequest) []store.ScriptedLine {
 	rng := rand.New(rand.NewSource(int64(len(req.Team.ID)) + int64(req.Team.Ordinal)))
 	out := []store.ScriptedLine{}
 	ord := 0
-	for round := 0; round < 3; round++ {
+	// One pass per act, reading that act's truth, so even the canned transcript
+	// carries the session's learning arc instead of repeating its opening.
+	for act, truth := range req.PhaseTruth {
 		for _, st := range req.Students {
 			g := req.Goals[rng.Intn(len(req.Goals))]
-			state := req.Truth[st.ID][g.ID]
-			tpl := fallbackTemplates[state]
+			tpl := fallbackTemplates[truth[st.ID][g.ID]]
 			if len(tpl) == 0 {
 				continue
 			}
@@ -238,7 +278,7 @@ func fallbackScript(sessionID string, req ScriptRequest) []store.ScriptedLine {
 				ID: uuid.NewString(), SessionID: sessionID, TeamID: req.Team.ID,
 				StudentID: st.ID, Ordinal: ord,
 				Body:  fmt.Sprintf(tpl[rng.Intn(len(tpl))], g.Ordinal),
-				GapMs: (3 + rng.Intn(6)) * 1000,
+				GapMs: (3 + rng.Intn(6)) * 1000, Phase: act + 1,
 			})
 		}
 	}

@@ -240,6 +240,14 @@ func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.T
 
 	highest := fresh[len(fresh)-1].Seq
 
+	// History rows are stamped with the phase the lesson is in, so the
+	// progress view can say when the agent changed its mind as well as how.
+	sess, err := m.Store.GetSession(sessionID)
+	if err != nil {
+		return false, fmt.Errorf("read session: %w", err)
+	}
+	phase := sess.CurrentPhase
+
 	if m.Agent == nil {
 		// No model configured: do what can be computed exactly, and refuse to
 		// invent the rest. Understanding is not derivable from message counts,
@@ -268,7 +276,7 @@ func (m *Monitor) assessTeam(ctx context.Context, sessionID string, team model.T
 		return false, fmt.Errorf("assess: %w", err)
 	}
 
-	m.applyRound(sessionID, team, goals, students, out)
+	m.applyRound(sessionID, team, goals, students, out, phase)
 	if err := m.Store.SetMonitorCursor(team.ID, highest, ""); err != nil {
 		return true, fmt.Errorf("advance cursor: %w", err)
 	}
@@ -319,7 +327,7 @@ func buildPrompt(team model.Team, goals []model.Goal, students []model.Student,
 // A name that matches no student on this team is dropped with a log line: the
 // alternative is attributing a judgement to the wrong person.
 func (m *Monitor) applyRound(sessionID string, team model.Team, goals []model.Goal,
-	students []model.Student, out roundOut) {
+	students []model.Student, out roundOut, phase int) {
 
 	studentByName := map[string]model.Student{}
 	for _, s := range students {
@@ -350,7 +358,7 @@ func (m *Monitor) applyRound(sessionID string, team model.Team, goals []model.Go
 		if err := m.Store.UpsertAssessment(model.Assessment{
 			SessionID: sessionID, StudentID: st.ID, GoalID: g.ID, State: state,
 			Confidence: a.Confidence, Evidence: a.Evidence, UpdatedAt: now,
-		}); err != nil {
+		}, phase); err != nil {
 			m.logf("monitor %s: store assessment: %v", team.Name, err)
 		}
 	}

@@ -125,6 +125,14 @@ func (p *Player) runTeam(ctx context.Context, team model.Team) {
 			// Loud, because the consequence is a line replayed forever.
 			log.Printf("player %s: mark line %s played: %v", team.Name, line.ID, err)
 		}
+		// The transcript decides when the lesson has moved on, not a timer.
+		// Playing a line from a later act advances the session into it, which
+		// is what the accuracy panel then scores the agent against. The store
+		// never moves a session backwards, so teams reaching act 2 at
+		// different moments is fine.
+		if err := p.Store.AdvanceSessionPhase(line.SessionID, line.Phase); err != nil {
+			log.Printf("player %s: advance to phase %d: %v", team.Name, line.Phase, err)
+		}
 		if p.OnMessage != nil {
 			p.OnMessage(*msg)
 		}

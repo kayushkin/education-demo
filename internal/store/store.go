@@ -57,20 +57,27 @@ func msPtr(v sql.NullInt64) *time.Time {
 // ---------- sessions ----------
 
 func (s *Store) CreateSession(sess *model.Session) error {
+	phaseCount := sess.PhaseCount
+	if phaseCount <= 0 {
+		phaseCount = 1
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO sessions (id, title, subject, status, created_at) VALUES (?,?,?,?,?)`,
-		sess.ID, sess.Title, sess.Subject, string(sess.Status), ms(sess.CreatedAt))
+		`INSERT INTO sessions (id, title, subject, status, created_at, current_phase, phase_count)
+		 VALUES (?,?,?,?,?,1,?)`,
+		sess.ID, sess.Title, sess.Subject, string(sess.Status), ms(sess.CreatedAt), phaseCount)
 	return err
 }
 
 func (s *Store) GetSession(id string) (*model.Session, error) {
 	row := s.db.QueryRow(
-		`SELECT id, title, subject, status, created_at, started_at, ended_at FROM sessions WHERE id = ?`, id)
+		`SELECT id, title, subject, status, created_at, started_at, ended_at, current_phase, phase_count
+		 FROM sessions WHERE id = ?`, id)
 	var out model.Session
 	var created int64
 	var started, ended sql.NullInt64
 	var status string
-	if err := row.Scan(&out.ID, &out.Title, &out.Subject, &status, &created, &started, &ended); err != nil {
+	if err := row.Scan(&out.ID, &out.Title, &out.Subject, &status, &created, &started, &ended,
+		&out.CurrentPhase, &out.PhaseCount); err != nil {
 		return nil, err
 	}
 	out.Status = model.SessionStatus(status)
@@ -81,7 +88,7 @@ func (s *Store) GetSession(id string) (*model.Session, error) {
 
 func (s *Store) ListSessions() ([]model.Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, subject, status, created_at, started_at, ended_at
+		`SELECT id, title, subject, status, created_at, started_at, ended_at, current_phase, phase_count
 		 FROM sessions ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -93,7 +100,8 @@ func (s *Store) ListSessions() ([]model.Session, error) {
 		var created int64
 		var started, ended sql.NullInt64
 		var status string
-		if err := rows.Scan(&v.ID, &v.Title, &v.Subject, &status, &created, &started, &ended); err != nil {
+		if err := rows.Scan(&v.ID, &v.Title, &v.Subject, &status, &created, &started, &ended,
+			&v.CurrentPhase, &v.PhaseCount); err != nil {
 			return nil, err
 		}
 		v.Status = model.SessionStatus(status)
@@ -274,32 +282,94 @@ func (s *Store) AddHumanStudent(st *model.Student) error {
 // ---------- truth ----------
 
 func (s *Store) SetTruth(t model.Truth) error {
+	phase := t.Phase
+	if phase <= 0 {
+		phase = 1
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO truths (student_id, goal_id, state) VALUES (?,?,?)
-		 ON CONFLICT(student_id, goal_id) DO UPDATE SET state = excluded.state`,
-		t.StudentID, t.GoalID, string(t.State))
+		`INSERT INTO truths (student_id, goal_id, phase, state) VALUES (?,?,?,?)
+		 ON CONFLICT(student_id, goal_id, phase) DO UPDATE SET state = excluded.state`,
+		t.StudentID, t.GoalID, phase, string(t.State))
 	return err
 }
 
-func (s *Store) ListTruths(sessionID string) ([]model.Truth, error) {
+// InsertPhaseTruths writes a whole phase in one transaction.
+func (s *Store) InsertPhaseTruths(truths []model.Truth) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(
+		`INSERT INTO truths (student_id, goal_id, phase, state) VALUES (?,?,?,?)
+		 ON CONFLICT(student_id, goal_id, phase) DO UPDATE SET state = excluded.state`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, t := range truths {
+		if _, err := stmt.Exec(t.StudentID, t.GoalID, t.Phase, string(t.State)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ListTruthsAtPhase returns the class's ground truth during one phase.
+func (s *Store) ListTruthsAtPhase(sessionID string, phase int) ([]model.Truth, error) {
 	rows, err := s.db.Query(
-		`SELECT t.student_id, t.goal_id, t.state FROM truths t
-		 JOIN students st ON st.id = t.student_id WHERE st.session_id = ?`, sessionID)
+		`SELECT t.student_id, t.goal_id, t.phase, t.state FROM truths t
+		 JOIN students st ON st.id = t.student_id
+		 WHERE st.session_id = ? AND t.phase = ?`, sessionID, phase)
 	if err != nil {
 		return nil, err
 	}
+	return scanTruths(rows)
+}
+
+// MaxTruthPhase is the last phase ground truth was written for.
+func (s *Store) MaxTruthPhase(sessionID string) (int, error) {
+	var n sql.NullInt64
+	err := s.db.QueryRow(
+		`SELECT MAX(t.phase) FROM truths t JOIN students st ON st.id = t.student_id
+		 WHERE st.session_id = ?`, sessionID).Scan(&n)
+	if err != nil || !n.Valid {
+		return 0, err
+	}
+	return int(n.Int64), nil
+}
+
+func scanTruths(rows *sql.Rows) ([]model.Truth, error) {
 	defer rows.Close()
 	out := []model.Truth{}
 	for rows.Next() {
 		var v model.Truth
 		var state string
-		if err := rows.Scan(&v.StudentID, &v.GoalID, &state); err != nil {
+		if err := rows.Scan(&v.StudentID, &v.GoalID, &v.Phase, &state); err != nil {
 			return nil, err
 		}
 		v.State = model.UnderstandingState(state)
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+// ListTruths returns ground truth for the phase the session is CURRENTLY in.
+//
+// That is the right thing to score the agent's latest opinion against: judging
+// a fresh assessment against phase 1 would mark the agent wrong for correctly
+// noticing that a student has since learned something.
+func (s *Store) ListTruths(sessionID string) ([]model.Truth, error) {
+	rows, err := s.db.Query(
+		`SELECT t.student_id, t.goal_id, t.phase, t.state FROM truths t
+		 JOIN students st ON st.id = t.student_id
+		 WHERE st.session_id = ?
+		   AND t.phase = (SELECT current_phase FROM sessions WHERE id = ?)`,
+		sessionID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return scanTruths(rows)
 }
 
 // ---------- messages ----------
@@ -387,6 +457,9 @@ type ScriptedLine struct {
 	Ordinal   int
 	Body      string
 	GapMs     int
+	// Phase is the segment of the lesson this line belongs to. Playing it
+	// advances the session into that phase.
+	Phase int
 }
 
 func (s *Store) InsertScriptedLines(lines []ScriptedLine) error {
@@ -396,14 +469,19 @@ func (s *Store) InsertScriptedLines(lines []ScriptedLine) error {
 	}
 	defer tx.Rollback()
 	stmt, err := tx.Prepare(
-		`INSERT INTO scripted_lines (id, session_id, team_id, student_id, ordinal, body, gap_ms)
-		 VALUES (?,?,?,?,?,?,?)`)
+		`INSERT INTO scripted_lines (id, session_id, team_id, student_id, ordinal, body, gap_ms, phase)
+		 VALUES (?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, l := range lines {
-		if _, err := stmt.Exec(l.ID, l.SessionID, l.TeamID, l.StudentID, l.Ordinal, l.Body, l.GapMs); err != nil {
+		phase := l.Phase
+		if phase <= 0 {
+			phase = 1
+		}
+		if _, err := stmt.Exec(l.ID, l.SessionID, l.TeamID, l.StudentID, l.Ordinal,
+			l.Body, l.GapMs, phase); err != nil {
 			return err
 		}
 	}
@@ -414,10 +492,11 @@ func (s *Store) InsertScriptedLines(lines []ScriptedLine) error {
 // is spent.
 func (s *Store) NextScriptedLine(teamID string) (*ScriptedLine, error) {
 	row := s.db.QueryRow(
-		`SELECT id, session_id, team_id, student_id, ordinal, body, gap_ms FROM scripted_lines
+		`SELECT id, session_id, team_id, student_id, ordinal, body, gap_ms, phase FROM scripted_lines
 		 WHERE team_id = ? AND played_at IS NULL ORDER BY ordinal LIMIT 1`, teamID)
 	var l ScriptedLine
-	if err := row.Scan(&l.ID, &l.SessionID, &l.TeamID, &l.StudentID, &l.Ordinal, &l.Body, &l.GapMs); err != nil {
+	if err := row.Scan(&l.ID, &l.SessionID, &l.TeamID, &l.StudentID, &l.Ordinal,
+		&l.Body, &l.GapMs, &l.Phase); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -453,14 +532,101 @@ func (s *Store) CountUnplayedLines(sessionID string) (int, error) {
 
 // ---------- assessments ----------
 
-func (s *Store) UpsertAssessment(a model.Assessment) error {
-	_, err := s.db.Exec(
+// UpsertAssessment stores the agent's current opinion and appends to the
+// history whenever that opinion is NEW or DIFFERENT.
+//
+// Appending only on change is deliberate: a round that re-confirms what the
+// agent already thought is not a change of mind, and recording it would bury
+// the handful of real transitions -- the moment a student stopped being lost --
+// under hundreds of identical rows.
+func (s *Store) UpsertAssessment(a model.Assessment, phase int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var prior string
+	err = tx.QueryRow(
+		`SELECT state FROM assessments WHERE student_id = ? AND goal_id = ?`,
+		a.StudentID, a.GoalID).Scan(&prior)
+	changed := err == sql.ErrNoRows || (err == nil && prior != string(a.State))
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	if _, err := tx.Exec(
 		`INSERT INTO assessments (session_id, student_id, goal_id, state, confidence, evidence, updated_at)
 		 VALUES (?,?,?,?,?,?,?)
 		 ON CONFLICT(student_id, goal_id) DO UPDATE SET
 		   state = excluded.state, confidence = excluded.confidence,
 		   evidence = excluded.evidence, updated_at = excluded.updated_at`,
-		a.SessionID, a.StudentID, a.GoalID, string(a.State), a.Confidence, a.Evidence, ms(a.UpdatedAt))
+		a.SessionID, a.StudentID, a.GoalID, string(a.State), a.Confidence, a.Evidence,
+		ms(a.UpdatedAt)); err != nil {
+		return err
+	}
+	if changed {
+		if _, err := tx.Exec(
+			`INSERT INTO assessment_history (session_id, student_id, goal_id, state, confidence, phase, at)
+			 VALUES (?,?,?,?,?,?,?)`,
+			a.SessionID, a.StudentID, a.GoalID, string(a.State), a.Confidence, phase,
+			ms(a.UpdatedAt)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// FirstAndLatestAssessments returns, per (student, goal), the agent's earliest
+// recorded opinion and its current one. This is the agent's OWN view of what
+// changed over the lesson, which is the honest one to show a teacher: it is
+// what the tool would report in a real classroom, where no ground truth exists.
+func (s *Store) FirstAndLatestAssessments(sessionID string) (first, latest []model.Assessment, err error) {
+	rows, err := s.db.Query(
+		`SELECT h.student_id, h.goal_id, h.state, h.confidence, h.phase, h.at, h.id
+		 FROM assessment_history h WHERE h.session_id = ? ORDER BY h.id`, sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	type key struct{ student, goal string }
+	firstOf := map[key]model.Assessment{}
+	latestOf := map[key]model.Assessment{}
+	order := []key{}
+	for rows.Next() {
+		var a model.Assessment
+		var state string
+		var at int64
+		var phase, id int
+		if err := rows.Scan(&a.StudentID, &a.GoalID, &state, &a.Confidence, &phase, &at, &id); err != nil {
+			return nil, nil, err
+		}
+		a.SessionID = sessionID
+		a.State = model.UnderstandingState(state)
+		a.UpdatedAt = fromMs(at)
+		k := key{a.StudentID, a.GoalID}
+		if _, seen := firstOf[k]; !seen {
+			firstOf[k] = a
+			order = append(order, k)
+		}
+		latestOf[k] = a
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	for _, k := range order {
+		first = append(first, firstOf[k])
+		latest = append(latest, latestOf[k])
+	}
+	return first, latest, nil
+}
+
+// AdvanceSessionPhase moves the session into phase, never backwards.
+func (s *Store) AdvanceSessionPhase(sessionID string, phase int) error {
+	_, err := s.db.Exec(
+		`UPDATE sessions SET current_phase = ? WHERE id = ? AND current_phase < ?`,
+		phase, sessionID, phase)
 	return err
 }
 

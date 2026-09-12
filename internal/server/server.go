@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+api+"/sessions/{id}/stream", s.handleStream)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/accuracy", s.handleAccuracy)
 	mux.HandleFunc("GET "+api+"/sessions/{id}/truth", s.handleTruth)
+	mux.HandleFunc("GET "+api+"/sessions/{id}/progress", s.handleProgress)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/start", s.handleStart)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/pause", s.handlePause)
 	mux.HandleFunc("POST "+api+"/sessions/{id}/resume", s.handleResume)
@@ -217,6 +218,7 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	built.Session.CreatedAt = time.Now().UTC()
+	built.Session.PhaseCount = len(built.PhaseTruths)
 	if err := s.cfg.Store.CreateSession(&built.Session); err != nil {
 		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
 		return
@@ -239,8 +241,8 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	for _, t := range built.Truths {
-		if err := s.cfg.Store.SetTruth(t); err != nil {
+	for _, phase := range built.PhaseTruths {
+		if err := s.cfg.Store.InsertPhaseTruths(phase.Truths); err != nil {
 			writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
 			return
 		}
@@ -252,6 +254,10 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		"teams":    built.Teams,
 		"students": built.Students,
 		"planted":  built.Planted,
+		// The session already carries phase_count; repeated here so a caller
+		// creating a session learns how many acts it will run in without a
+		// second read.
+		"phase_count": built.Session.PhaseCount,
 	})
 }
 
@@ -453,16 +459,30 @@ func (s *Server) generateScripts(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	truths, err := s.cfg.Store.ListTruths(sessionID)
+	maxPhase, err := s.cfg.Store.MaxTruthPhase(sessionID)
 	if err != nil {
 		return err
 	}
-	truthMap := map[string]map[string]model.UnderstandingState{}
-	for _, t := range truths {
-		if truthMap[t.StudentID] == nil {
-			truthMap[t.StudentID] = map[string]model.UnderstandingState{}
+	if maxPhase == 0 {
+		return fmt.Errorf("session %s has no ground truth to write a transcript from", sessionID)
+	}
+	// Every phase, because the writer is asked to show the transitions BETWEEN
+	// them as dialogue. Handing it only the current phase is what would make
+	// students silently arrive at new understanding between acts.
+	phaseTruth := make([]map[string]map[string]model.UnderstandingState, maxPhase)
+	for phase := 1; phase <= maxPhase; phase++ {
+		truths, err := s.cfg.Store.ListTruthsAtPhase(sessionID, phase)
+		if err != nil {
+			return err
 		}
-		truthMap[t.StudentID][t.GoalID] = t.State
+		m := map[string]map[string]model.UnderstandingState{}
+		for _, t := range truths {
+			if m[t.StudentID] == nil {
+				m[t.StudentID] = map[string]model.UnderstandingState{}
+			}
+			m[t.StudentID][t.GoalID] = t.State
+		}
+		phaseTruth[phase-1] = m
 	}
 
 	var reqs []simulation.ScriptRequest
@@ -483,7 +503,7 @@ func (s *Server) generateScripts(ctx context.Context, sessionID string) error {
 			continue
 		}
 		req := simulation.ScriptRequest{
-			Team: t, Goals: goals, Students: simulated, Truth: truthMap,
+			Team: t, Goals: goals, Students: simulated, PhaseTruth: phaseTruth,
 		}
 		// Plant the two social situations in fixed rooms so a demo always has
 		// one of each to point at, and say which in the logs.
@@ -608,6 +628,80 @@ func (s *Server) handleAccuracy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, analytics.Score(truths, assessments))
+}
+
+// handleProgress answers "what changed over the lesson", twice over: what the
+// agent observed, and — because the students are synthetic — what actually
+// happened. See analytics.Progress for why the two are never merged.
+func (s *Server) handleProgress(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	sess, err := s.cfg.Store.GetSession(sessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "unknown_session", "no such session")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	goals, err := s.cfg.Store.ListGoals(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	students, err := s.cfg.Store.ListStudents(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+
+	firstSeen, latestSeen, err := s.cfg.Store.FirstAndLatestAssessments(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	out := analytics.Progress{
+		PhasesElapsed: sess.CurrentPhase,
+		PhaseCount:    sess.PhaseCount,
+		Observed: analytics.ComputeProgress("observed",
+			toTruthlike(firstSeen), toTruthlike(latestSeen), goals, students),
+	}
+
+	// The actual half exists only while ground truth does. A session whose
+	// students were all real would simply not have it, and the response says
+	// so by omitting it rather than by sending zeroes.
+	firstTruth, err := s.cfg.Store.ListTruthsAtPhase(sessionID, 1)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+		return
+	}
+	if len(firstTruth) > 0 {
+		currentTruth, err := s.cfg.Store.ListTruthsAtPhase(sessionID, sess.CurrentPhase)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "store_failed", err.Error())
+			return
+		}
+		actual := analytics.ComputeProgress("actual",
+			truthsToTruthlike(firstTruth), truthsToTruthlike(currentTruth), goals, students)
+		out.Actual = &actual
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func toTruthlike(in []model.Assessment) []model.Truthlike {
+	out := make([]model.Truthlike, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
+}
+
+func truthsToTruthlike(in []model.Truth) []model.Truthlike {
+	out := make([]model.Truthlike, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
 }
 
 // handleTruth reveals the simulation's hidden ground truth.

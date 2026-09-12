@@ -112,6 +112,13 @@ type Session struct {
 	CreatedAt time.Time     `json:"created_at"`
 	StartedAt *time.Time    `json:"started_at,omitempty"`
 	EndedAt   *time.Time    `json:"ended_at,omitempty"`
+	// CurrentPhase is the segment of the lesson currently being played. It
+	// advances as the transcript crosses a phase boundary, and it is what the
+	// accuracy panel scores the agent's latest opinion against — judging a
+	// fresh assessment against phase 1's truth would mark the agent wrong for
+	// noticing that somebody has since learned something.
+	CurrentPhase int `json:"current_phase"`
+	PhaseCount   int `json:"phase_count"`
 }
 
 // Goal is one learning objective for a session.
@@ -152,13 +159,25 @@ type Student struct {
 	JoinedAt  *time.Time `json:"joined_at,omitempty"`
 }
 
-// Truth is a simulated student's actual understanding of a goal: the hidden
-// variable the simulation draws their dialogue from and the monitoring agent
-// is trying to recover. Humans have no Truth row.
+// Truth is a simulated student's actual understanding of a goal DURING ONE
+// PHASE: the hidden variable the simulation draws their dialogue from and the
+// monitoring agent is trying to recover. Humans have no Truth row.
+//
+// Phase is what makes a lesson a lesson rather than a snapshot. Understanding
+// is advanced between phases by the peer-learning rule, so the same student and
+// goal carry a different state early and late, and the difference is the
+// learning the dashboard reports.
 type Truth struct {
 	StudentID string             `json:"student_id"`
 	GoalID    string             `json:"goal_id"`
+	Phase     int                `json:"phase"`
 	State     UnderstandingState `json:"state"`
+}
+
+// PhaseTruth is the whole class's understanding at one point in the lesson.
+type PhaseTruth struct {
+	Phase  int     `json:"phase"`
+	Truths []Truth `json:"truths"`
 }
 
 // Message is one utterance in a team room, from a simulated or a real student.
@@ -216,3 +235,24 @@ type Misconception struct {
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
 }
+
+// Truthlike is the one thing Progress needs from a row: which student, which
+// goal, and what state.
+//
+// Both an Assessment (what the agent believes) and a Truth (what is actually
+// so) satisfy it, which is what lets one comparison serve both halves of the
+// progress view without either being converted into the other and losing what
+// it is.
+type Truthlike interface {
+	Student() string
+	Goal() string
+	Understanding() UnderstandingState
+}
+
+func (t Truth) Student() string                   { return t.StudentID }
+func (t Truth) Goal() string                      { return t.GoalID }
+func (t Truth) Understanding() UnderstandingState { return t.State }
+
+func (a Assessment) Student() string                   { return a.StudentID }
+func (a Assessment) Goal() string                      { return a.GoalID }
+func (a Assessment) Understanding() UnderstandingState { return a.State }

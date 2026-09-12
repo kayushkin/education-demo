@@ -19,6 +19,36 @@ Around those it keeps a per-goal understanding grid for every student, class-wid
 per goal, and a collected list of what the class is getting wrong — the artifact a teacher
 reteaches from next lesson.
 
+## The lesson actually goes somewhere
+
+A session runs in **three acts**, and understanding is advanced between them by a rule about
+the *group*, not the individual: what decides whether you learn a goal is not where you
+started but whether anybody sitting with you can explain it. One person who understands pulls
+the rest up and corrects wrong ideas. Two people who half-grasp it can piece it together,
+slower, and are much worse at catching an error. Nobody who can do either, and the group
+stalls.
+
+Measured over many simulated classes:
+
+| | start | end |
+|---|---|---|
+| understand the goal | 34% | **67%** |
+| hold it wrongly | 8% | **5%** |
+
+and about 69% of team-goals improve, while ~15% of teams are still stuck on some goal at the
+end — which is exactly who the teacher needed to reach.
+
+**Misunderstanding is rare, and rare by construction rather than by tuning a dial.** It is the
+least likely state to start in, and it usually gets corrected, because correcting it only needs
+one person in the group who can explain and with three to a table that is usually true. It
+*spreads* only in one specific climate: nobody can explain the goal, fewer than two people
+half-grasp it, and somebody confidently wrong is filling the silence. That is the lone
+misinformer, it happens in about 6% of team-goal phases, and it is the single thing this tool
+exists to catch.
+
+`GET /api/sessions/{id}/progress` reports the whole arc: per goal and per student, beginning
+against end.
+
 ## The part that makes it more than a demo
 
 The classroom is simulated: each student carries a hidden true understanding of each goal —
@@ -87,14 +117,18 @@ if missing, and refuses to finish unless the public URL answers.
 ## How it works
 
 ```
-POST /sessions          seed 10 teams, 30 students, draw hidden truth per student per goal
+POST /sessions          seed 10 teams, 30 students, draw hidden truth for ACT 1,
+                        then advance it through acts 2 and 3 by the peer-learning rule
 POST /sessions/{id}/start
       │
-      ├─ 10 parallel calls ──→ one scripted transcript per team, written FROM the hidden truth
-      │                        (30-90s; the session reports "starting" immediately)
+      ├─ 10 parallel calls ──→ one 3-act transcript per team, written FROM all three acts'
+      │                        truth, so the LEARNING happens on the page: the model is told
+      │                        which states changed and must show why
+      │                        (60-120s; the session reports "starting" immediately)
       │
-      ├─ player   ──→ drips each script into its room in real time, one goroutine per team
-      │               a human typing in a room is just another writer to the same log
+      ├─ player   ──→ drips each script into its room in real time, one goroutine per team.
+      │               Playing a line from a later act advances the session into it, so the
+      │               TRANSCRIPT decides when the class has moved on, not a timer.
       │
       └─ monitor  ──→ every 25s, one call per team that has moved, over its recent transcript
                       → assessments, alerts, misconceptions  → SSE → dashboard
@@ -105,12 +139,23 @@ subscription. This process reads no API key and never talks to an LLM provider d
 
 ### Deliberate choices
 
-**Planted scenarios.** A purely random draw across 30 students often yields a class where no
-group is fully stuck and nobody is confidently wrong in front of others — and a demo with an
-empty alert feed proves nothing. So `Build` forces one stuck group and one confidently-wrong
-explainer, and returns what it planted in `planted[]` rather than letting it look like the
-agent found something the simulation did not put there. The agent still has to *find* them,
-and in the measured run it found both, plus several nobody planted.
+**One planted scenario, not several.** A five-minute demo needs to reliably contain the alert
+the tool is for, but planting several would make the class look full of them when it is not. So
+`Build` forces exactly one lone misinformer — one group, one goal, one confidently wrong
+student nobody there can correct — and returns it in `planted[]` rather than letting it look
+like the agent found something the simulation did not put there. Everything else is the
+learning rule running on its own, and it produces its own cases at about 6%.
+
+**The progress view is reported twice and the two halves are never merged.** `observed` is the
+agent's first opinion against its current one — what the tool would report in a real classroom,
+and the honest headline. `actual` is the simulation's phase-1 truth against now: exact, and
+available only because the students are synthetic. The gap between them is how much to trust
+the first one.
+
+**Coverage growing is not learning.** The progress view compares only student-goal pairs the
+agent had an opinion about at *both* ends. Counting a pair it has just started hearing about
+would report a class improving when the only thing that improved was the microphone. Pinned by
+`TestCoverageGrowthIsNotLearning`.
 
 **Silence is `unknown`, never `misunderstands`.** A student who knows they do not know asks a
 question. A student who misunderstands teaches the error to their team. Collapsing the two
@@ -139,9 +184,9 @@ again after she dismisses one.
 |---|---|
 | `internal/model` | domain types and the vocabularies, served at `/api/vocabularies` |
 | `internal/store` | SQLite. `_txlock=immediate` is load-bearing — see the concurrency test |
-| `internal/simulation` | roster, hidden truth, transcript writing, playback |
+| `internal/simulation` | roster, hidden truth, the peer-learning rule (`learning.go`), transcript writing, playback |
 | `internal/monitor` | the watching agent, and the model-free participation fallback |
-| `internal/analytics` | per-goal rollups and the accuracy scoring |
+| `internal/analytics` | per-goal rollups, beginning-vs-end progress, and the accuracy scoring |
 | `internal/server` | HTTP, SSE hub, session runner |
 | `web` | React 19 + TypeScript + Vite |
 
