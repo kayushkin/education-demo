@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"github.com/kayushkin/education-demo/internal/bridgeauth"
 	"log"
 	"net/http"
 	"os"
@@ -33,6 +34,12 @@ func main() {
 		interval  = flag.Duration("monitor-interval", 25*time.Second, "gap between assessment rounds")
 	)
 	flag.Parse()
+
+	// llm-bridge-server gates every route; stamp this process's calls to it
+	// with the service token. Host-scoped, so nothing else sees the token.
+	if err := bridgeauth.StampRequestsToBridge(*bridgeURL); err != nil {
+		log.Fatal(err)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
 		log.Fatalf("create database directory: %v", err)
