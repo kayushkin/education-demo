@@ -19,7 +19,7 @@
      · DM Mono   — digits that must align in a column: matrices, tables,
                    coverage counts. NOT a decorative label font.
 
-   Colour never carries meaning alone. Every understanding state also has a
+   Color never carries meaning alone. Every understanding state also has a
    glyph and a fixed position in the server's worst→best order; every change
    also has a direction (dot position), an arrow and a signed number.
    =========================================================================== */
@@ -320,7 +320,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
 /* ===========================================================================
-   State marks — pastel fill + glyph + fixed position. Never colour alone.
+   State marks — pastel fill + glyph + fixed position. Never color alone.
    =========================================================================== */
 
 .state-mark {
@@ -336,7 +336,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .state-mark.lg { width: 21px; height: 21px; font-size: 12px; border-radius: 6px; }
 
 /* A state's NAME, carried on its own pastel. The hue sits in the fill and the
-   word sits in deep ink on top — a pastel is never used as a text colour, so
+   word sits in deep ink on top — a pastel is never used as a text color, so
    every one of these clears 7:1 whatever the state. */
 .state-chip {
   display: inline-flex; align-items: center;
@@ -354,7 +354,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 
 .strip { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--surface-sunk); }
 .strip-seg { height: 100%; min-width: 0; }
-/* texture differentiates segments beyond hue, for the colourblind path */
+/* texture differentiates segments beyond hue, for the colorblind path */
 .strip-seg[data-idx='0'] { background-image: repeating-linear-gradient(135deg, rgba(36,31,26,.22) 0 2px, transparent 2px 4px); }
 .strip-seg[data-idx='1'] { background-image: repeating-linear-gradient(90deg, rgba(36,31,26,.2) 0 1px, transparent 1px 3px); }
 .strip-seg[data-idx='2'] { background-image: repeating-linear-gradient(45deg, rgba(36,31,26,.16) 0 2px, transparent 2px 5px); }
@@ -983,7 +983,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   .cmdbar { height: auto; min-height: var(--bar-h); flex-wrap: wrap;
     gap: 8px 10px; padding: 10px 14px; }
   /* hide-sm means what it says: hidden on a small screen. The toggle's label
-     is deliberately NOT one of these — an unlabelled 36x20 switch is unusable,
+     is deliberately NOT one of these — an unlabeled 36x20 switch is unusable,
      and it was measured rendering 0x0 when it carried this class. */
   .cmdbar .hide-sm { display: none; }
   /* ...but the readout is not decoration: it carries whether the lesson is
@@ -1028,9 +1028,9 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
    ===========================================================================
    Dumbbells on one shared 0–100% axis, one row per goal. The change is a drawn
    object: the segment's length is its size and its direction is its sign, so a
-   goal that went backwards is a shape difference before it is a colour one.
+   goal that went backwards is a shape difference before it is a color one.
    Direction is carried four times over — dot position, arrow glyph, signed
-   number, then colour — so colour is never the only channel.
+   number, then color — so color is never the only channel.
 
    Growth is sage green. Decline is ochre, NOT the alert red: a goal sliding
    backwards is a different kind of thing from a student teaching an error, and

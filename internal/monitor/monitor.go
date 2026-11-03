@@ -135,7 +135,7 @@ type Monitor struct {
 
 	// MinNewMessages is how many unseen messages a room must have before a
 	// round is worth its call. Below this the transcript has not moved enough
-	// to change a judgement.
+	// to change a judgment.
 	MinNewMessages int
 	// WindowSize is how many recent messages each call reads.
 	WindowSize int
@@ -343,7 +343,7 @@ func buildPrompt(team model.Team, goals []model.Goal, students []model.Student,
 
 // applyRound resolves the model's names back to ids and persists everything.
 // A name that matches no student on this team is dropped with a log line: the
-// alternative is attributing a judgement to the wrong person.
+// alternative is attributing a judgment to the wrong person.
 func (m *Monitor) applyRound(sessionID string, team model.Team, goals []model.Goal,
 	students []model.Student, out roundOut, phase int) {
 

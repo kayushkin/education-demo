@@ -93,9 +93,9 @@ func TestScoreIgnoresPairsWithoutTruth(t *testing.T) {
 	}
 }
 
-// TestAdjacentCountsNeighbouringStates checks the kinder metric: being one
+// TestAdjacentCountsNeighboringStates checks the kinder metric: being one
 // rung off is counted as adjacent, being two rungs off is not.
-func TestAdjacentCountsNeighbouringStates(t *testing.T) {
+func TestAdjacentCountsNeighboringStates(t *testing.T) {
 	truths := []model.Truth{
 		{StudentID: "s1", GoalID: "a", State: model.StateUnderstands},
 		{StudentID: "s2", GoalID: "a", State: model.StateUnderstands},

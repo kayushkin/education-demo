@@ -5,7 +5,7 @@ import type { Vocabularies } from '../lib/types'
 type Size = 'sm' | 'md' | 'lg'
 
 /**
- * One understanding state. Colour is never the only channel: the mark also
+ * One understanding state. Color is never the only channel: the mark also
  * carries a glyph, a title and — wherever it sits in a strip or a key — a
  * fixed position in the server's worst→best order.
  */
@@ -52,7 +52,7 @@ export function StateKey({ vocab }: { vocab: Vocabularies }) {
 
 /**
  * A team-or-class distribution across the states, drawn worst→best left to
- * right. The unassessed remainder is hatched, not coloured — an absent
+ * right. The unassessed remainder is hatched, not colored — an absent
  * assessment is the agent declining to assert, which is a different thing from
  * the `unknown` state it does assert.
  */

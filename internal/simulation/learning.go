@@ -145,8 +145,8 @@ func AdvanceTeamGoal(rng *rand.Rand, in []model.UnderstandingState) []model.Unde
 		switch s {
 		case model.StateUnderstands:
 			// Understanding is not lost inside one lesson. A student who can
-			// explain it does not stop being able to because a neighbour is
-			// loud — modelling that would make the arc noise rather than
+			// explain it does not stop being able to because a neighbor is
+			// loud — modeling that would make the arc noise rather than
 			// learning.
 		case model.StatePartial:
 			if rng.Float64() < o.partialToUnderstands {

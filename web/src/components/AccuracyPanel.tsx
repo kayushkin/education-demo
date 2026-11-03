@@ -3,7 +3,7 @@ import { humanize, stateColor } from '../lib/display'
 import type { Accuracy, Vocabularies } from '../lib/types'
 import { SectionHead, StateMark } from './primitives'
 
-/** A state name as a labelled token, so it never has to agree with the sentence. */
+/** A state name as a labeled token, so it never has to agree with the sentence. */
 function StateToken({ vocab, state }: { vocab: Vocabularies; state: string }) {
   const i = vocab.understanding_states.indexOf(state)
   return (

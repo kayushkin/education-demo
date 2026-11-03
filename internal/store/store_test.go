@@ -189,7 +189,7 @@ func TestHumanJoinsAsNewStudent(t *testing.T) {
 		t.Fatalf("next line: %v", err)
 	}
 	if line == nil {
-		t.Error("the simulated student's script was cancelled by someone else joining")
+		t.Error("the simulated student's script was canceled by someone else joining")
 	}
 	truths, err := st.ListTruths(sessionID)
 	if err != nil {

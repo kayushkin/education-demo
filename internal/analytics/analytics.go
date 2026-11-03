@@ -152,7 +152,7 @@ type Accuracy struct {
 	TruthPairs int     `json:"truth_pairs"`
 	Correct    int     `json:"correct"`
 	ExactPct   float64 `json:"exact_pct"`
-	// AdjacentPct counts a neighbouring state as near-enough (partial for
+	// AdjacentPct counts a neighboring state as near-enough (partial for
 	// understands). It is the kinder number and is reported beside the strict
 	// one, never instead of it.
 	AdjacentPct float64 `json:"adjacent_pct"`

@@ -28,14 +28,14 @@ import { SectionHead, UnderstandingStrip } from './primitives'
 //     it and its direction is the sign, so five goals read as five arrows
 //     pointing mostly one way. Each row carries its own label, so there is
 //     nothing to decode against a legend, and a goal that went backwards is a
-//     segment pointing the other way — a shape difference, before any colour.
+//     segment pointing the other way — a shape difference, before any color.
 //     The four-state composition it would otherwise lose is kept underneath as
 //     a paired before/after strip, which is exactly the paired-stacked-bar
 //     option demoted to where it belongs: the detail under the headline.
 //
-// Colour is never the only channel here, same rule as the rest of the console:
+// Color is never the only channel here, same rule as the rest of the console:
 // direction is carried by the dots' relative POSITION, by an arrow glyph in the
-// readout, and by a signed number — the segment's colour is the fourth copy of
+// readout, and by a signed number — the segment's color is the fourth copy of
 // it, not the first.
 
 const UNDERSTOOD = 'understood'
@@ -62,7 +62,7 @@ function Dumbbell({ measure, before, after, polarity, tone, size = 'md' }: {
   before: number
   after: number
   polarity: Polarity
-  /** The colour of the quantity itself, for the end dot. */
+  /** The color of the quantity itself, for the end dot. */
   tone: string
   size?: 'md' | 'sm'
 }) {
@@ -151,7 +151,7 @@ function GoalRow({ vocab, ordinal, label, delta, truthDelta }: {
         )}
         <span className="ba-pairs">
           {delta.pairs > 0
-            ? `${delta.pairs} comparable ${delta.pairs === 1 ? 'judgement' : 'judgements'}`
+            ? `${delta.pairs} comparable ${delta.pairs === 1 ? 'judgment' : 'judgments'}`
             : 'nothing comparable yet'}
         </span>
       </div>
@@ -396,7 +396,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
             </div>
           </div>
           <div className="stat">
-            <div className="k">Judgements that rose</div>
+            <div className="k">Judgments that rose</div>
             <div className="v" style={{ color: 'var(--growth-ink)' }}>{cls.improved}</div>
             <div className="n">{cls.declined} fell · {cls.unchanged} held · {cls.pairs} compared</div>
           </div>
@@ -434,7 +434,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
         )}
 
         <div className="ba-axis">
-          <span className="eyebrow">per goal · share of comparable judgements</span>
+          <span className="eyebrow">per goal · share of comparable judgments</span>
           <span className="ba-ticks" aria-hidden="true"><i>0%</i><i>25%</i><i>50%</i><i>75%</i><i>100%</i></span>
         </div>
 
@@ -517,7 +517,7 @@ export function ProgressPanel({ vocab, progress, teams, loading, error, reveal, 
                       <td className="moved">
                         {d.pairs > 0
                           ? <>
-                              <span title={`${d.improved} of this student's judgements rose`} style={{ color: d.improved > 0 ? 'var(--growth-ink)' : 'var(--ink-faint)' }}>▲{d.improved}</span>{' '}
+                              <span title={`${d.improved} of this student's judgments rose`} style={{ color: d.improved > 0 ? 'var(--growth-ink)' : 'var(--ink-faint)' }}>▲{d.improved}</span>{' '}
                               <span title={`${d.declined} fell`} style={{ color: d.declined > 0 ? 'var(--decline-ink)' : 'var(--ink-faint)' }}>▼{d.declined}</span>{' '}
                               <span title={`${d.unchanged} held`} style={{ color: 'var(--ink-faint)' }}>={d.unchanged}</span>
                             </>

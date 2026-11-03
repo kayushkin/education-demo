@@ -95,7 +95,7 @@ func TestMisinformationActuallySpreads(t *testing.T) {
 }
 
 // TestUnderstandingIsNeverLost pins that a student who can explain a goal does
-// not stop being able to inside one lesson. Modelling that would turn the arc
+// not stop being able to inside one lesson. Modeling that would turn the arc
 // into noise and would make the progress view unreadable.
 func TestUnderstandingIsNeverLost(t *testing.T) {
 	rng := rand.New(rand.NewSource(13))
@@ -162,7 +162,7 @@ func TestMostGoalsImproveOverASession(t *testing.T) {
 		t.Errorf("understanding did not rise: %.1f%% -> %.1f%%", startPct, endPct)
 	}
 	// Misunderstanding must be rare at the start and rarer at the end, which
-	// is the specific behaviour asked for.
+	// is the specific behavior asked for.
 	startWrong := float64(startW) / float64(cells) * 100
 	endWrong := float64(endW) / float64(cells) * 100
 	if startWrong > 12 {

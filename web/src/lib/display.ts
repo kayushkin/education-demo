@@ -2,7 +2,7 @@ import type { TruthCell, Vocabularies } from './types'
 
 // Presentation for server-owned enums.
 //
-// Nothing here hardcodes an enum member. Colour and glyph are chosen by the
+// Nothing here hardcodes an enum member. Color and glyph are chosen by the
 // value's POSITION in the list the server sent, so a renamed or added state
 // still renders — and `understanding_states` arriving worst-to-best is the only
 // ordering fact the UI relies on.
@@ -19,7 +19,7 @@ export function stateIndex(vocab: Vocabularies, state: string): number {
   return vocab.understanding_states.indexOf(state)
 }
 
-/** Colour for a state, by its rank in the worst→best order. */
+/** Color for a state, by its rank in the worst→best order. */
 export function stateColor(index: number): string {
   if (index < 0) return 'var(--state-unassessed)'
   return STATE_RAMP[Math.min(index, STATE_RAMP.length - 1)]
@@ -66,7 +66,7 @@ export function deltaSign(before: number, after: number): -1 | 0 | 1 | null {
   return 0
 }
 
-/** Arrow for a direction. Redundant with colour, never replaced by it. */
+/** Arrow for a direction. Redundant with color, never replaced by it. */
 export function deltaGlyph(sign: -1 | 0 | 1 | null): string {
   if (sign === null) return '–'
   return sign > 0 ? '▲' : sign < 0 ? '▼' : '='
