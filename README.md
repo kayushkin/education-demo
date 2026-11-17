@@ -1,6 +1,6 @@
 # Breakout — live group monitoring for teachers
 
-**https://kayushkin.com/education-demo**
+Not published: it has no login, so it runs on a loopback address only (taken off the public site on 2026-11-17).
 
 A teacher splits 30 students into 10 breakout teams and can be in one room at a time.
 For the other nine she is guessing. This watches all ten and tells her where to walk.
@@ -98,9 +98,9 @@ cd web && npm install && npm run build && cd ..
 ./education-demo-server -web web/dist
 ```
 
-Deploy to kayushkin.com/education-demo with `./deploy.sh` — it builds both halves, checks the
-front end's asset paths carry the prefix, installs the systemd unit, adds the nginx location
-if missing, and refuses to finish unless the public URL answers.
+Deploy with `./deploy.sh` — it builds both halves, checks the front end's asset paths carry
+the prefix, installs the systemd unit, and refuses to finish if nginx publishes the service,
+which has no login.
 
 ### Flags
 

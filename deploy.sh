@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 #
-# Deploy education-demo to https://kayushkin.com/education-demo
+# Deploy education-demo on this host's loopback address. It is NOT published.
 #
 #   1. build the front end (base path /education-demo/)
 #   2. build and provenance-check the Go binary
 #   3. install the systemd user unit and restart
-#   4. install the nginx location if it is not already there
-#   5. verify the live URL actually answers
+#   4. refuse to finish if nginx publishes it
+#
+# The server has no login: anyone who reaches it can start sessions that run
+# model calls. It was taken off the public site on 2026-11-17 for that reason,
+# and this script no longer adds an nginx location. Give it a login before
+# publishing it again.
 #
 set -euo pipefail
 
@@ -20,14 +24,8 @@ BIN_DIR="$HOME/bin"
 SERVICE="education-demo.service"
 BINARY="education-demo-server"
 UNIT_DEST="$HOME/.config/systemd/user/$SERVICE"
+# The public vhost, read only to make sure it does not publish this service.
 NGINX_SITE="/etc/nginx/sites-enabled/kayushkin.com"
-# nginx.conf does `include /etc/nginx/sites-enabled/*` — EVERY file, not just
-# the ones without a suffix. A backup written beside the original is therefore
-# loaded as a second copy of the whole vhost, and nginx warns about a
-# conflicting server name and silently ignores one of them. Backups go outside
-# the included directory.
-NGINX_BACKUP_DIR="/etc/nginx/backups"
-PUBLIC_URL="https://kayushkin.com/education-demo"
 
 cd "$REPO_DIR"
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -120,52 +118,16 @@ case "$health" in
     ;;
 esac
 
-echo "==> Checking nginx..."
-if sudo -n grep -q "location /education-demo" "$NGINX_SITE" 2>/dev/null; then
-  echo "    location already present"
-else
-  echo "    inserting location before the catch-all"
-  sudo -n mkdir -p "$NGINX_BACKUP_DIR"
-  sudo -n cp "$NGINX_SITE" "$NGINX_BACKUP_DIR/kayushkin.com.bak.$(date +%s)"
-  # Insert before the final `location / {` so the more specific prefix wins.
-  sudo -n python3 - "$NGINX_SITE" "$REPO_DIR/nginx-education-demo.conf" <<'PY'
-import sys
-site, snippet_path = sys.argv[1], sys.argv[2]
-with open(site) as f:
-    text = f.read()
-with open(snippet_path) as f:
-    snippet = "".join(l for l in f if not l.startswith("#") or "location" in l)
-marker = "    # Main site (catch-all)"
-if marker not in text:
-    marker = "    location / {"
-    if marker not in text:
-        sys.exit("cannot find the catch-all location to insert before")
-text = text.replace(marker, snippet.rstrip() + "\n\n" + marker, 1)
-with open(site, "w") as f:
-    f.write(text)
-PY
-  sudo -n nginx -t
-  # A conflicting server name means a stray vhost copy is being loaded — most
-  # likely a backup someone left in sites-enabled. Refuse rather than reload
-  # into a config where one of two identical vhosts is silently ignored.
-  if sudo -n nginx -t 2>&1 | grep -q "conflicting server name"; then
-    echo "    REFUSING TO RELOAD: nginx reports a conflicting server name." >&2
-    echo "    Something in /etc/nginx/sites-enabled/ duplicates a vhost." >&2
-    sudo -n nginx -t 2>&1 | grep "conflicting server name" >&2
-    exit 1
-  fi
-  sudo -n systemctl reload nginx
-fi
-
-echo "==> Verifying the public URL..."
-code="$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL/api/health")"
-if [ "$code" != "200" ]; then
-  echo "    FAILED: $PUBLIC_URL/api/health returned $code" >&2
+echo "==> Checking that nginx does not publish it..."
+if sudo -n grep -q "location /education-demo" "$NGINX_SITE"; then
+  echo "    FAILED: $NGINX_SITE has a location /education-demo." >&2
+  echo "    This server has no login, so it must not be published. Remove the" >&2
+  echo "    location from the vhost that owns it, or give the server a login first." >&2
   exit 1
 fi
-echo "    $PUBLIC_URL/api/health -> 200"
+echo "    not published"
 echo
-echo "Deployed: $PUBLIC_URL"
+echo "Deployed on loopback only."
 
 # Last act: write this deploy to repo-store's ledger, so the next agent sees what is live.
 ( cd "$(dirname "$0")" && "$HOME/bin/deploy-gate" record )
